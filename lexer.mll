@@ -15,9 +15,9 @@
 let digit = ['0'-'9']
 let alpha = [ 'a'-'z' 'A'-'Z' '_' ]
 let ident = alpha ( alpha | digit )*
-let jjint = digit+
-let jjchar = [ ' '-'!' '#'-'[' ']'-'~' ] | "\\\\" | "\\\"" | "\\n" | "\\t"
-let jjstring =   '"' char* '"'
+let jint = digit+
+let jchar = [ ' '-'!' '#'-'[' ']'-'~' ] | "\\\\" | "\\\"" | "\\n" | "\\t"
+let jstring =   '"' char* '"'
 let int_ident = jint ident
 let ident_lpar = ident '('
 let int_lpar = jint '('
@@ -36,7 +36,8 @@ rule token=parse
                                           token lexbuf }
     | "\n" { new_line lexbuf; token lexbuf }
     | eof { EOF }
-    |
+    |jint as s {INT (int_of_string s)}
+    |"+" {PLUS}
 
 rule comment=parse 
     | "\n" {new_line lexbuf;token lexbuf}
