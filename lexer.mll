@@ -2,12 +2,13 @@
   open Lexing
   open Parser
   
+  (*
   let keyword=["else",ELSE;"elseif",ELSEIF;"end",END;"false",FALSE;"for",FOR;"function",FUNCTION;"if",IF;
   "mutable",MUTABLE;"return",RETURN;"struct",STRUCT;"true",TRUE;"while",WHILE]
 	let h=Hastbl.create 32 
 	List.iter (fun (s,id)-> Hashtbl.add h s id) keyword
 	let id_or_kwd s= try Hashtbl.find h s with Not_found -> IDENT s
-  
+  *)
 }
 
 let digit = ['0'-'9']
