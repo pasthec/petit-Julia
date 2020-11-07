@@ -8,6 +8,12 @@
 %token PLUS "+"
 %token<int> JINT
 
+%start file
+
+%type int
+
+%%
+
 file:
     | decl* EOF { }
 
