@@ -36,7 +36,7 @@ rule token=parse
                                           token lexbuf }
     | "\n" { new_line lexbuf; token lexbuf }
     | eof { EOF }
-    |jint as s {INT (int_of_string s)}
+    |jint as s {JINT (int_of_string s)}
     |"+" {PLUS}
 
 rule comment=parse 
