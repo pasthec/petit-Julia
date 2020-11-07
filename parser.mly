@@ -10,15 +10,15 @@
 
 %start file
 
-%type int
+%type <int> file
 
 %%
 
 file:
-    | decl* EOF { }
+    | d=decl EOF { d }
 
 decl:
-    | expr
+    | e=expr { e }
 
 expr:
     | n=JINT { n }
