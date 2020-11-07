@@ -1,5 +1,3 @@
-/* Analyseur lexical principal /*
-
 {
   open Lexing
   open Parser
