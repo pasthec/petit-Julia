@@ -15,7 +15,7 @@ let alpha = [ 'a'-'z' 'A'-'Z' '_' ]
 let ident = alpha ( alpha | digit )*
 let jint = digit+
 let jchar = [ ' '-'!' '#'-'[' ']'-'~' ] | "\\\\" | "\\\"" | "\\n" | "\\t"
-let jstring =   '"' char* '"'
+let jstring =   '"' jchar* '"'
 let int_ident = jint ident
 let ident_lpar = ident '('
 let int_lpar = jint '('
@@ -30,14 +30,12 @@ let before_auto_semicolon = ident | jint | int_ident | rpar_ident | jstring
 rule token=parse 
     | "#" { comment lexbuf }
     | " " | "\t" { token lexbuf }
-    | (before_auto_semicolon as x) "\n" { /*TODO let buffer = lexbuf.lex_buffer in lexbuf.lex_buffer <- cat x (cat ";" buffer); */
-                                          token lexbuf }
     | "\n" { new_line lexbuf; token lexbuf }
     | eof { EOF }
-    |jint as s {JINT (int_of_string s)}
-    |"+" {PLUS}
+    | jint as s {JINT (int_of_string s)}
+    | "+" {PLUS}
 
-rule comment=parse 
+and comment=parse 
     | "\n" {new_line lexbuf;token lexbuf}
     | eof {EOF}
     | _ {token lexbuf} 
