@@ -1,8 +1,19 @@
 /* Analyseur syntaxique pour petit Julia */
 
 %{
-
+    
 %}
 
-%token IF ELSE RETURN FOR
-%token PLUS MINUS TIMES DIV MOD
+%token EOF
+%token PLUS "+"
+%token<int> JINT
+
+file:
+    | decl* EOF { }
+
+decl:
+    | expr
+
+expr:
+    | n=JINT { n }
+    | e1=expr "+" e2=expr { e1 + e2 }
