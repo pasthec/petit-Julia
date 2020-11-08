@@ -7,6 +7,7 @@
 %token EOF
 %token PLUS "+"
 %token<int> JINT
+%token SEMICOLON
 
 %start file
 
@@ -22,4 +23,4 @@ decl:
 
 expr:
     | n=JINT { n }
-    | e1=expr "+" e2=expr { e1 + e2 }
+    |e1=expr "+" e2=expr {e1+e2}
