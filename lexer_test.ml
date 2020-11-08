@@ -1,4 +1,4 @@
-let lb=Lexing.from_channel stdin in
+let ()=let lb=Lexing.from_channel stdin in
   let t=ref (Lexer.token lb) in
     while !t<>EOF do
       (match !t with
