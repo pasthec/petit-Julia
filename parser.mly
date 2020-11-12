@@ -1,7 +1,8 @@
 /* Analyseur syntaxique pour petit Julia */
 
-%{open Ast
-open Parsing
+%{
+    open Ast
+    open Parsing
 %}
 
 %token EOF
@@ -13,7 +14,7 @@ open Parsing
 
 %start file
 
-%type <int> file
+%type <Ast.file> file
 
 %%
 
@@ -25,5 +26,5 @@ decl:
 
 expr:
     | n=JINT { Eint n }
-    |e1=expr "+" e2=expr { Ebinop (Ar(Plus), e1 , e2 ) }
-    |e1=expr "*" e2=expr { Ebinop (Ar(Times), e1 , e2 ) }
+    | e1=expr "+" e2=expr { Ebinop (Ar(Plus), e1, e2) }
+    | e1=expr "*" e2=expr { Ebinop (Ar(Times), e1, e2) }

@@ -24,8 +24,10 @@ type expr =
 
 type param = ident (*en fait il faudra gérer les déclarations de type en temps et en heure*)
 
-type function = { name : ident ; par : param list ; instr : expr list }
+type func = { name : ident ; par : param list ; instr : expr list }
 
 type structure = { mut : bool ; name : ident ; par : param list}
+
+type decl = expr
 
 type file = decl list 
