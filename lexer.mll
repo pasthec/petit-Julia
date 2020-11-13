@@ -32,7 +32,7 @@ rule token=parse
     	     if !before_auto_semicolon then begin
 	     	   before_auto_semicolon:=false;
 	           SEMICOLON
-	     end 
+	                    end 
              else token lexbuf }
     | eof { EOF }
     | jint as s {before_auto_semicolon:=true; JINT (int_of_string s)}
