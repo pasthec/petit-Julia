@@ -36,8 +36,16 @@ rule token=parse
              else token lexbuf }
     | eof { EOF }
     | jint as s {before_auto_semicolon:=true; JINT (int_of_string s)}
+    | ident as s {before_auto_semicolon:=true; IDENT s}
+    | (jint as s) (ident as u) {before_auto_semicolon:=true; 
+                            INT_IDENT (int_of_string s,u)}
+    | jint as s '(' {INT_LPAR (int_of_string s)}
+    | "(" {LPAR}
+    | ")" {before_auto_semicolon:=true; RPAR} 
     | "+" {PLUS}
     | "*" {TIMES}
+    | ";" {SEMICOLON}
+    |_ {failwith "unauthorized character or token not yet implemented"}
 
 and comment=parse 
     | "\n" {new_line lexbuf;if !before_auto_semicolon then 
