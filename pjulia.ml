@@ -30,7 +30,8 @@ let rec pretty_printer e =
                          Printf.printf "(";
                          pretty_printer e2 ;
                          Printf.printf ")"
-    | Enot e -> Printf.printf "^("; pretty_printer e; Printf.printf ")"
+    | Enot e -> Printf.printf "!("; pretty_printer e; Printf.printf ")"
+    | Eminus e -> Printf.printf "- "; pretty_printer e
     
     
 let () = List.iter (fun d -> pretty_printer d; print_newline ()) ast

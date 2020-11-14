@@ -17,6 +17,7 @@ type expr =
   | Evar of ident 
   | Ebinop of binop*expr*expr
   | Enot of expr 
+  | Eminus of expr
 
 
 
