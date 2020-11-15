@@ -9,6 +9,8 @@
 %token PLUS "+"
 %token MINUS "-"
 %token TIMES "*" 
+%token DIV "/"
+%token IDIV
 
 %token ELSE ELSEIF END FALSE FOR FUNCTION IF MUTABLE RETURN STRUCT TRUE WHILE
 %token AND "&&" 
@@ -29,11 +31,11 @@
 
 %type <Ast.file> file
 
-%nonassoc "!"
-%left "*"
-%left "+" "-"
-%left "&&"
 %left "||"
+%left "&&"
+%left "+" "-"
+%left "*" "/" IDIV
+%nonassoc "!"
 
 %%
 
@@ -52,6 +54,8 @@ expr:
     | e1=expr "+" e2=expr { Ebinop (Ar(Plus), e1, e2) }
     | e1=expr "*" e2=expr { Ebinop (Ar(Times), e1, e2) }
     | e1=expr "-" e2=expr { Ebinop (Ar(Minus), e1, e2) }
+    | e1=expr "/" e2=expr { Ebinop (Ar(Div), e1, e2) }
+    | e1=expr IDIV e2=expr { Ebinop (Ar(Div), e2, e1) }
     | "(" e=expr ")" {e}
     | "-" e=expr { Eminus e}
     | TRUE {Ebool true}

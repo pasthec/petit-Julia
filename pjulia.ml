@@ -1,4 +1,5 @@
 open Ast
+open Format
 
 let lb=Lexing.from_channel stdin
 let ast= Parser.file Lexer.token lb
@@ -16,25 +17,19 @@ let binop_rep = [ Ar(Plus), "+";
                   Comp(Supeq), ">=";
                   Comp(Sup), ">" ]
 
-let rec pretty_printer e = 
-
+let rec pprint fmt e = 
     match e with
-    | Eint i -> Printf.printf "%d" i
-    | Estring s -> Printf.printf "%s" s
-    | Ebool b -> Printf.printf "%b" b
-    | Evar x -> Printf.printf "%s" x
-    | Ebinop(op,e1,e2) -> Printf.printf "(";
-                        pretty_printer e1;
-                        Printf.printf ")";
-                         Printf.printf " %s " (List.assoc op binop_rep);
-                         Printf.printf "(";
-                         pretty_printer e2 ;
-                         Printf.printf ")"
-    | Enot e -> Printf.printf "!("; pretty_printer e; Printf.printf ")"
-    | Eminus e -> Printf.printf "- "; pretty_printer e
+    | Eint i -> fprintf fmt "%d" i
+    | Estring s -> fprintf fmt "%s" s
+    | Ebool b -> fprintf fmt "%b" b
+    | Evar x -> fprintf fmt "%s" x
+    | Ebinop(op,e1,e2) -> fprintf fmt "(@[%a %s@ %a@])" pprint e1
+                                  (List.assoc op binop_rep) pprint e2
+    | Enot e -> fprintf fmt "!%a" pprint e
+    | Eminus e -> fprintf fmt "-%a" pprint e
     
     
-let () = List.iter (fun d -> pretty_printer d; print_newline ()) ast
+let () = List.iter (fun d -> printf "%a" pprint d; print_newline ()) ast
 
 
 
