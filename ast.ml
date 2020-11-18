@@ -4,7 +4,7 @@ type compare_op = Equal | Different | Infeq | Inf | Supeq | Sup
 
 type bool_op = And | Or 
 
-type arith_op = Plus | Minus | Times | Exp
+type arith_op = Plus | Minus | Times | Exp |Div
 
 type binop = Comp of compare_op | Bop of bool_op | Ar of arith_op 
 (*opérateurs binaires, je sépare pour que ça soit peut-etre plus simple pour l'interpréteur ? *)
