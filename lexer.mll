@@ -1,9 +1,12 @@
 {
   open Lexing
   open Parser
+
+
+exception Lexing_error of string
   
 let keyword_before=["true",TRUE;"false",FALSE;"return",RETURN;"end",END]
-(*mots clés devant ; auto*)
+(*mots clés devant ; auto *)
 
 let keyword_not_before = [
         "else",ELSE;
@@ -14,7 +17,7 @@ let keyword_not_before = [
         "mutable",MUTABLE;
         "struct",STRUCT;
         "while",WHILE
-] (*mots clés pas devant ; auto*)
+] (*mots clés pas devant ; auto *)
 
 let h1=Hashtbl.create 32 ;;
 let h2=Hashtbl.create 32 ;;
@@ -31,6 +34,10 @@ let id_or_kwd s=
 (*let before_auto_semicolon = ident | jint | int_ident | rpar_ident | jstring
 			      | "true" | "false" | "return" | ')' | "end"*)
   let before_auto_semicolon =ref false 
+
+
+let error s=
+  raise (Lexing_error s )
 }
 
 let digit = ['0'-'9']
@@ -76,7 +83,7 @@ rule token=parse
     | "||" {OR}
     | "!" {NOT}
 
-    |_ {failwith "unauthorized character or token not yet implemented"}
+    |_ {error "unauthorized character or token not yet implemented"}
 
 and comment=parse 
     | "\n" {new_line lexbuf;if !before_auto_semicolon then 
