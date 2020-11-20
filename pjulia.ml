@@ -18,7 +18,7 @@ let binop_rep = [ Ar(Plus), "+";
                   Comp(Sup), ">" ]
 
 let rec pprint fmt e = 
-    match e with
+    begin match e with
     | Eint i -> fprintf fmt "%d" i
     | Estring s -> fprintf fmt "%s" s
     | Ebool b -> fprintf fmt "%b" b
@@ -27,8 +27,13 @@ let rec pprint fmt e =
                                   (List.assoc op binop_rep) pprint e2
     | Enot e -> fprintf fmt "!%a" pprint e
     | Eminus e -> fprintf fmt "-%a" pprint e
-    
-    
+    | IfElse(e,b1,b2) -> fprintf fmt "if %a {\n%a}\n else {\n%a}" pprint e
+                                      pprintl b1 pprintl b2
+    end 
+and pprintl fmt = function
+    | [] -> fprintf fmt ""
+    | e::q -> fprintf fmt "%a\n%a" pprint e pprintl q
+
 let () = List.iter (fun d -> printf "%a" pprint d; print_newline ()) ast
 
 
