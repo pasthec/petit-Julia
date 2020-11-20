@@ -8,14 +8,15 @@ let usage = "usage: petit-julia [options] file.jl"
 
 let parse_only = ref false
 
-let type_only= ref false 
+let type_only = ref false 
 
 let spec =
   [
     "--parse-only", Arg.Set parse_only, "  stop after parsing";
     "--type-only", Arg.Set type_only, " stop after typing"]
 
-let file =
+let file = (*chaîne de caractère avec le nom du fichier passé en argument, vérifie qu'on a bien un .jl*)
+  (* (ou éventuellement pour le moment stdin) *)
   let f = ref "stdin" in
   let set_file s =
     match s with
@@ -27,7 +28,8 @@ let file =
   Arg.parse spec set_file usage;
   !f;;
 
-let report (b,e) =
+let report (b,e) = (*affiche la première ligne de l'erreur, avec la localisation*)
+(*b et e sont de type Lexing.position et représentent le début et la fin de la portion qui produit une erreur*)
   let l = b.pos_lnum in
   let fc = b.pos_cnum - b.pos_bol + 1 in
   let lc = e.pos_cnum - b.pos_bol + 1 in
@@ -45,17 +47,22 @@ let () =
     if !type_only then exit 0;
     puis production de code*)
   with
-    | Lexer.Lexing_error s ->
+    | Lexer.Lexing_error s -> (*erreur lexicale*)
 	report (lexeme_start_p lb, lexeme_end_p lb);
 	eprintf "lexical error: %s@." s;
 	exit 1
-    | Parser.Error ->
+    | Parser.Error -> (*erreur syntaxique*)
 	report (lexeme_start_p lb, lexeme_end_p lb);
 	eprintf "syntax error@.";
 	exit 1
-    (*| Typer.Error s ->
-	eprintf "error: %s@." s;
-	exit 1*)
+    | Typer.Type_error (loc,given,expected) ->(*mauvais type*)
+  report loc;
+	eprintf "this expression has type %s but was expected to have type %s" given expected;
+  exit 1
+    |Typer.Unbound_value (loc,s)->(*variable non déclarée, c'est le typeur qui s'en aperçoit*)
+  report loc;
+  eprintf "unbound value %s" s;
+  exit 1
     | e ->
-	eprintf "Anomaly: %s\n@." (Printexc.to_string e);
+	eprintf "Anomaly: %s\n@." (Printexc.to_string e); (*erreur inattendue du compilateur, inch'allah ça sert à rien*)
 	exit 2

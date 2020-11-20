@@ -15,7 +15,7 @@ let binop_rep = [ Ar(Plus), "+";
                   Comp(Sup), ">" ]
 
 let rec pprint fmt e = 
-    match e with
+    match e.desc with
     | Eint i -> fprintf fmt "%d" i
     | Estring s -> fprintf fmt "%s" s
     | Ebool b -> fprintf fmt "%b" b
