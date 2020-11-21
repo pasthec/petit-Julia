@@ -42,7 +42,7 @@ let () =
     let f = Parser.file Lexer.token lb in
     close_in c;
     if !parse_only then exit 0;
-    Printer.print_file f
+    (*Printer.print_file f*)
     (*let f_typ=Typer.typing f in
     if !type_only then exit 0;
     puis production de code*)
@@ -51,7 +51,7 @@ let () =
 	report (lexeme_start_p lb, lexeme_end_p lb);
 	eprintf "lexical error: %s@." s;
 	exit 1
-    | Parser.Error -> (*erreur syntaxique*)
+    | Parser.Error | Assert_failure _ -> (*erreur syntaxique*)
 	report (lexeme_start_p lb, lexeme_end_p lb);
 	eprintf "syntax error@.";
 	exit 1

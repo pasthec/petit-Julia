@@ -38,6 +38,12 @@ let id_or_kwd s=
 
 let error s=
   raise (Lexing_error s )
+
+let assert_not_kwd s= (*sert pour s'assurer qu'un par-ident ou un int-indent ne se fait pas avec un keyword
+  c'est bien une errreur de syntaxe, mais qu'on détecte dès l'analyse lexicale 
+  et qu'il serait difficile de propager*)
+  if (Hashtbl.mem h1 s) || (Hashtbl.mem h2 s) then
+    raise Parser.Error
 }
 
 let digit = ['0'-'9']
@@ -67,21 +73,43 @@ rule token=parse
     | ident as s { let t,b=id_or_kwd s in
                     before_auto_semicolon:=b; t}
     | (jint as s) (ident as u) { before_auto_semicolon := true; 
-                                 INT_IDENT (int_of_string s,u) }
+                                 assert_not_kwd s;
+                                  INT_IDENT (int_of_string s,u) }
     | jint as s '(' {INT_LPAR (int_of_string s)}
     | ')' (ident as s) { before_auto_semicolon:=true;
-                         RPAR_IDENT s }
-    | "(" {LPAR}
+                         assert_not_kwd s;
+                          RPAR_IDENT s }
+    | (ident as s) '(' {before_auto_semicolon:=false;
+                        assert_not_kwd s;
+                        IDENT_LPAR s}
+
+    | "\"" (jchar* as s) "\"" {before_auto_semicolon:=true;
+                                    JSTRING s}
+
+    | "(" {before_auto_semicolon:=false; LPAR}
     | ")" {before_auto_semicolon:=true; RPAR} 
-    | "+" {PLUS}
-    | "*" {TIMES}
-    | "/" {DIV}
-    | "\\" {IDIV}
-    | "-" {MINUS}
-    | ";" {SEMICOLON}
-    | "&&" {AND}
-    | "||" {OR}
-    | "!" {NOT}
+    | "+" {before_auto_semicolon:=false; PLUS}
+    | "*" {before_auto_semicolon:=false; TIMES}
+    | "/" {before_auto_semicolon:=false; DIV}
+    | "\\" {before_auto_semicolon:=false; IDIV}
+    | "-" {before_auto_semicolon:=false; MINUS}
+    | ";" {before_auto_semicolon:=false; SEMICOLON}
+    | "&&" {before_auto_semicolon:=false; AND}
+    | "||" {before_auto_semicolon:=false; OR}
+    | "!" {before_auto_semicolon:=false; NOT}
+    | "^" {before_auto_semicolon:=false; EXP}
+    | "," {before_auto_semicolon:=false; COMMA}
+    | ":" {before_auto_semicolon:=false; COLON}
+    | "::" {before_auto_semicolon:=false; DOUBLE_COLON}
+    | "." {before_auto_semicolon:=false; DOT}
+    | "==" {before_auto_semicolon:=false; BEQUAL}
+    | "!=" {before_auto_semicolon:=false; DIFFERENT}
+    | "=" {before_auto_semicolon:=false; EQUAL}
+    | "<=" {before_auto_semicolon:=false; INFEQ}
+    | "<" {before_auto_semicolon:=false; INF}
+    | ">=" {before_auto_semicolon:=false; SUPEQ}
+    | ">" {before_auto_semicolon:=false; SUP}
+    | "%" {before_auto_semicolon:=false; MOD}
 
     |_ {error "unauthorized character or token not yet implemented"}
 
