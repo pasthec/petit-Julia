@@ -73,7 +73,7 @@ rule token=parse
     | ident as s { let t,b=id_or_kwd s in
                     before_auto_semicolon:=b; t}
     | (jint as s) (ident as u) { before_auto_semicolon := true; 
-                                 assert_not_kwd s;
+                                 assert_not_kwd u;
                                   INT_IDENT (int_of_string s,u) }
     | jint as s '(' {INT_LPAR (int_of_string s)}
     | ')' (ident as s) { before_auto_semicolon:=true;
