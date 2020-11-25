@@ -111,7 +111,7 @@ rule token=parse
     | ">" {before_auto_semicolon:=false; SUP}
     | "%" {before_auto_semicolon:=false; MOD}
 
-    |_ {error "unauthorized character or token not yet implemented"}
+    |_ as c {error ("unauthorized character"^(String.make 1 c))}
 
 and comment=parse 
     | "\n" {new_line lexbuf;if !before_auto_semicolon then 

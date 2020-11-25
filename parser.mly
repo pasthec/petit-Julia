@@ -113,7 +113,17 @@ expr:
 
     | IF e=expr b=bloc el=else_stmt { {desc=IfElse(e,b,el);loc=($startpos,$endpos)} }
 
-    | s=IDENT_LPAR arg=separated_list(",",expr) ")" {{desc=Ecall (s,arg); loc=($startpos,$endpos)}}
+    | s=IDENT_LPAR arg=separated_list(",",expr) ")" {
+        match s,arg with
+            |"div",e1::[e2] -> {desc=Ebinop (Ar(Div), e2, e1);loc=($startpos,$endpos)} 
+            (*fonction div transformée en l'opérateur de division*)
+            |"div", _ -> assert false (*mauvais nombre d'arguments pour div*)
+            |"println", _ -> let en= {desc=Estring "\n"; loc=($startpos,$endpos)} in 
+                    (*on gère le sucre syntaxique pour println*)
+                            {desc=Ecall ("print",(arg @ [en]));loc=($startpos,$endpos)}        
+        
+        
+            |_,_ -> {desc=Ecall (s,arg); loc=($startpos,$endpos)}}
 
     | RETURN {{desc= Ereturn None; loc=($startpos,$endpos)}}
     | RETURN e=expr {{desc=Ereturn (Some e); loc=($startpos,$endpos)}} /*j'ai très peur des conflits que ça va provoquer*/
@@ -168,3 +178,5 @@ structure:
 param:
      s=IDENT {{pname=s; ptype=Tany}} /*sucre syntaxique : l'omission d'un type équivaut au type Any*/
     |s=IDENT "::" t=IDENT {{pname=s; ptype=Ast.type_of_string t}}
+
+
