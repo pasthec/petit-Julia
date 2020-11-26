@@ -49,16 +49,17 @@ exception Parse_error
 
 %type <Ast.file> file
 
+%nonassoc WHILE FOR
 %nonassoc RETURN
 %nonassoc IF
-%nonassoc WHILE FOR
+
 %right "="
 %left "||"
 %left "&&"
 %left "==" "!=" "<=" "<" ">=" ">" 
 %left "+" "-"
 %left "*" "%" "/" IDIV
-%nonassoc "!"
+%nonassoc "!" uminus
 %right "^"
 %left "."
 
@@ -105,7 +106,8 @@ expr:
     | s=JSTRING {{desc=Estring s;loc=($startpos,$endpos)}}
     
     | "(" b=bloc1 ")" {b}
-    | "-" e=expr { {desc=Eminus e;loc=($startpos,$endpos)}}
+
+    | "-" e=expr %prec uminus { {desc=Eminus e;loc=($startpos,$endpos)}}
     
     | TRUE {{desc=Ebool true;loc=($startpos,$endpos)}}
     | FALSE {{desc=Ebool false;loc=($startpos,$endpos)}}
@@ -113,7 +115,7 @@ expr:
     | e1=expr "||" e2=expr {{desc=Ebinop (Bop(Or),e1,e2);loc=($startpos,$endpos)}}
     | "!" e=expr {{desc=Enot e;loc=($startpos,$endpos)}}
 
-    | IF e=expr b=bloc el=else_stmt { {desc=IfElse(e,b,el);loc=($startpos,$endpos)} }
+    | IF c=expr_bloc el=else_stmt { {desc=IfElse(fst c,snd c,el);loc=($startpos,$endpos)} }
 
     | s=IDENT_LPAR arg=separated_list(",",expr) ")" {
         match s,arg with
@@ -127,14 +129,18 @@ expr:
         
             |_,_ -> {desc=Ecall (s,arg); loc=($startpos,$endpos)}}
 
-    /*| RETURN {{desc= Ereturn None; loc=($startpos,$endpos)}}*/
+    
     | RETURN e=ioption(expr) {{desc=Ereturn e; loc=($startpos,$endpos)}} /*j'ai très peur des conflits que ça va provoquer*/
 
-    | FOR x=IDENT "=" e1=expr ":" e2=expr b=bloc END {{desc=Efor(x,e1,e2,b); loc=($startpos,$endpos)}}
-    | WHILE e=expr b=bloc END {{desc=Ewhile(e,b); loc=($startpos,$endpos)}}
+    
+    | FOR x=IDENT "=" e1=expr ":" c=expr_bloc END {{desc=Efor(x,e1,fst c,snd c); loc=($startpos,$endpos)}}
+    | e=while_c b=bloc END {{desc=Ewhile (e,b); loc=($startpos,$endpos)}}
 
+while_c:
+    WHILE e=expr {e} /*je suis désespéré*/
 
-
+expr_bloc:
+    e=expr b=bloc {(e,b)} /*a réglé certains conflits par magie, n'en règle pas d'autres pour la même raison*/
 
 
 value: /*valeurs gauches*/
@@ -157,12 +163,15 @@ else_stmt:
                     c'est une erreur de syntaxe*)
                     |_ ->b end}
 
-    | ELSEIF e=expr b=bloc el=else_stmt { [{desc=IfElse (e,b,el);loc=($startpos,$endpos)}] }
+    | ELSEIF c=expr_bloc el=else_stmt { [{desc=IfElse (fst c,snd c,el);loc=($startpos,$endpos)}] }
 
 bloc:
-    | b=separated_list(";",expr) { b }
-    | ";" ";" b=bloc {b}
-
+    | ";"* {[]} /*fin de bloc avec autant de ; que nécessaire, y compris aucun
+                        inclut le bloc vide*/
+    | ";"* e=expr ";" b=bloc {e::b} /*on peut avoir autant de ; que nécessaire avant, et forcément un à la fin, 
+                                        le bloc peut continuer après*/
+    | ";"* e=expr { [e] } /*fin éventuelle de liste sans point-virgule derrière*/
+ 
 bloc1: 
     | e=expr {e}
     | e=expr ";" b=bloc {{desc=Eblock (e::b); loc=($startpos,$endpos)}}
@@ -188,5 +197,6 @@ param:
 
 
 param_list:
-      p=separated_list(";",param) {p}
-    | ";" ";" p=param_list {p}
+      ";"* {[]}
+    | ";"* p=param ";" l=param_list {p::l}
+    | ";"* p=param {[p]}

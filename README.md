@@ -2,7 +2,7 @@
 Projet du cours langages de programmation et compilation année 2020-2021.
 
 
-Conflits du parseur (25-11-20):
+Conflits du parseur (26-11-20):
 Faire menhir -v parser.mly pour créer le fichier parser.conflicts qui les explique
 
 Warning: 2 states have shift/reduce conflicts.
