@@ -50,6 +50,8 @@ exception Parse_error
 %type <Ast.file> file
 
 %nonassoc RETURN
+%nonassoc IF
+%nonassoc WHILE FOR
 %right "="
 %left "||"
 %left "&&"
@@ -83,7 +85,7 @@ expr:
         in 
         {desc=Ebinop (Ar(Times), n, s);loc=($startpos,$endpos)}}
 
-    | n=int_lpar e=expr ")" {{desc=Ebinop (Ar(Times), n, e);loc=($startpos,$endpos)}}
+    | n=int_lpar e=bloc1 ")" {{desc=Ebinop (Ar(Times), n, e);loc=($startpos,$endpos)}}
     | "(" e=expr s=rpar_ident {{desc=Ebinop (Ar(Times),e,s);loc=($startpos,$endpos)}}
     
     | e1=expr "+" e2=expr { {desc=Ebinop (Ar(Plus), e1, e2);loc=($startpos,$endpos)} }
@@ -102,7 +104,7 @@ expr:
 
     | s=JSTRING {{desc=Estring s;loc=($startpos,$endpos)}}
     
-    | "(" e=expr ")" {e}
+    | "(" b=bloc1 ")" {b}
     | "-" e=expr { {desc=Eminus e;loc=($startpos,$endpos)}}
     
     | TRUE {{desc=Ebool true;loc=($startpos,$endpos)}}
@@ -125,8 +127,8 @@ expr:
         
             |_,_ -> {desc=Ecall (s,arg); loc=($startpos,$endpos)}}
 
-    | RETURN {{desc= Ereturn None; loc=($startpos,$endpos)}}
-    | RETURN e=expr {{desc=Ereturn (Some e); loc=($startpos,$endpos)}} /*j'ai très peur des conflits que ça va provoquer*/
+    /*| RETURN {{desc= Ereturn None; loc=($startpos,$endpos)}}*/
+    | RETURN e=ioption(expr) {{desc=Ereturn e; loc=($startpos,$endpos)}} /*j'ai très peur des conflits que ça va provoquer*/
 
     | FOR x=IDENT "=" e1=expr ":" e2=expr b=bloc END {{desc=Efor(x,e1,e2,b); loc=($startpos,$endpos)}}
     | WHILE e=expr b=bloc END {{desc=Ewhile(e,b); loc=($startpos,$endpos)}}
@@ -159,6 +161,11 @@ else_stmt:
 
 bloc:
     | b=separated_list(";",expr) { b }
+    | ";" ";" b=bloc {b}
+
+bloc1: 
+    | e=expr {e}
+    | e=expr ";" b=bloc {{desc=Eblock (e::b); loc=($startpos,$endpos)}}
 
 func:
       FUNCTION f=IDENT_LPAR p=separated_list(",",param) ")" b=bloc END {
@@ -167,11 +174,11 @@ func:
         {fname=f ; fpar=p; ftype=Ast.type_of_string t ; finstr= b}}
 
 structure:
-      STRUCT s=IDENT p=separated_list(";",param) END {
-        {smut=false; sname=s; spar=p}
+      STRUCT s=IDENT p=param_list END {
+        {smut=false; sname=s; spar= p}
     }
 
-    | MUTABLE STRUCT s=IDENT p=separated_list(";",param) END {
+    | MUTABLE STRUCT s=IDENT p=param_list END {
         {smut=true; sname=s; spar=p}
     }
 
@@ -180,3 +187,6 @@ param:
     |s=IDENT "::" t=IDENT {{pname=s; ptype=Ast.type_of_string t}}
 
 
+param_list:
+      p=separated_list(";",param) {p}
+    | ";" ";" p=param_list {p}

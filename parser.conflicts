@@ -1,0 +1,72 @@
+
+** Conflict (shift/reduce/reduce) in state 71.
+** Tokens involved: SUPEQ SUP SEMICOLON PLUS OR MINUS INFEQ INF END ELSEIF ELSE DIFFERENT BEQUAL AND
+** The following explanations concentrate on token SUPEQ.
+** This state is reached from file after reading:
+
+WHILE expr MINUS expr 
+
+** The derivations that appear below have the following common factor:
+** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
+
+file 
+list(decl) EOF 
+decl list(decl) 
+expr SEMICOLON 
+(?)
+
+** In state 71, looking ahead at SUPEQ, reducing production
+** expr -> expr MINUS expr 
+** is permitted because of the following sub-derivation:
+
+WHILE expr bloc END 
+      expr SUPEQ expr // lookahead token appears
+      expr MINUS expr . 
+
+** In state 71, looking ahead at SUPEQ, shifting is permitted
+** because of the following sub-derivation:
+
+WHILE expr bloc END 
+      expr MINUS expr 
+                 expr . SUPEQ expr 
+
+** In state 71, looking ahead at SUPEQ, reducing production
+** expr -> MINUS expr 
+** is permitted because of the following sub-derivation:
+
+WHILE expr bloc END 
+           loption(separated_nonempty_list(SEMICOLON,expr)) 
+           separated_nonempty_list(SEMICOLON,expr) 
+           expr 
+           expr SUPEQ expr // lookahead token appears
+           MINUS expr . 
+
+** Conflict (shift/reduce) in state 3.
+** Tokens involved: TRUE LPAR JSTRING JINT INT_LPAR INT_IDENT IDENT_LPAR IDENT FALSE
+** The following explanations concentrate on token TRUE.
+** This state is reached from file after reading:
+
+WHILE RETURN 
+
+** The derivations that appear below have the following common factor:
+** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
+
+file 
+list(decl) EOF 
+decl list(decl) 
+expr SEMICOLON 
+(?)
+
+** In state 3, looking ahead at TRUE, shifting is permitted
+** because of the following sub-derivation:
+
+WHILE expr bloc END 
+      RETURN expr 
+             . TRUE 
+
+** In state 3, looking ahead at TRUE, reducing production
+** expr -> RETURN 
+** is permitted because of the following sub-derivation:
+
+WHILE expr bloc END // lookahead token appears because bloc can begin with TRUE
+      RETURN . 

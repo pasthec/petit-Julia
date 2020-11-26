@@ -30,6 +30,7 @@ and desc =
   | Ereturn of expr option (*juste return ou return e*)
   | Efor of ident*expr*expr*bloc (*variable,début,fin,instructions*)
   | Ewhile of expr*bloc (*condition,instructions*)
+  | Eblock of bloc 
 
 and bloc = expr list
 
