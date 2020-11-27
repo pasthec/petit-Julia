@@ -15,7 +15,7 @@ let binop_rep = [ Ar(Plus), "+";
                   Comp(Sup), ">" ]
 
 let rec pprint fmt e = 
-    match e with
+    match e.desc with
     | Eint i -> fprintf fmt "%d" i
     | Estring s -> fprintf fmt "%s" s
     | Ebool b -> fprintf fmt "%b" b
@@ -24,6 +24,7 @@ let rec pprint fmt e =
                                   (List.assoc op binop_rep) pprint e2
     | Enot e -> fprintf fmt "!%a" pprint e
     | Eminus e -> fprintf fmt "-%a" pprint e
+    |_ -> failwith "pattern matching exhaustive"
     
     
 let print_file f = List.iter (fun d -> printf "%a" pprint d; print_newline ()) f
