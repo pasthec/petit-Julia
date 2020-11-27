@@ -1,9 +1,9 @@
 
-** Conflict (shift/reduce) in state 69.
+** Conflict (shift/reduce) in state 72.
 ** Token involved: MINUS
 ** This state is reached from file after reading:
 
-WHILE expr 
+IF expr 
 
 ** The derivations that appear below have the following common factor:
 ** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
@@ -12,50 +12,19 @@ file
 list(decl) EOF 
 decl list(decl) 
 expr SEMICOLON 
-WHILE expr_bloc END 
-      (?)
+IF expr_bloc else_stmt 
+   (?)
 
-** In state 69, looking ahead at MINUS, shifting is permitted
+** In state 72, looking ahead at MINUS, shifting is permitted
 ** because of the following sub-derivation:
 
 expr bloc 
 expr . MINUS expr 
 
-** In state 69, looking ahead at MINUS, reducing production
+** In state 72, looking ahead at MINUS, reducing production
 ** list(SEMICOLON) -> 
 ** is permitted because of the following sub-derivation:
 
 expr bloc 
      list(SEMICOLON) expr SEMICOLON bloc // lookahead token appears because expr can begin with MINUS
      . 
-
-** Conflict (shift/reduce) in state 3.
-** Tokens involved: TRUE LPAR JSTRING JINT INT_LPAR INT_IDENT IDENT_LPAR IDENT FALSE
-** The following explanations concentrate on token TRUE.
-** This state is reached from file after reading:
-
-WHILE RETURN 
-
-** The derivations that appear below have the following common factor:
-** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
-
-file 
-list(decl) EOF 
-decl list(decl) 
-expr SEMICOLON 
-WHILE expr_bloc END 
-      (?)
-
-** In state 3, looking ahead at TRUE, shifting is permitted
-** because of the following sub-derivation:
-
-expr bloc 
-RETURN expr 
-       . TRUE 
-
-** In state 3, looking ahead at TRUE, reducing production
-** expr -> RETURN 
-** is permitted because of the following sub-derivation:
-
-expr bloc // lookahead token appears because bloc can begin with TRUE
-RETURN . 

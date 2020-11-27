@@ -53,6 +53,8 @@ exception Parse_error
 %nonassoc RETURN
 %nonassoc IF
 
+%nonassoc TRUE LPAR JSTRING JINT INT_LPAR INT_IDENT IDENT_LPAR IDENT FALSE
+
 %right "="
 %left "||"
 %left "&&"
@@ -70,8 +72,8 @@ file:
 
 decl:
     | e=expr ";" { e }
-    |f=func ";" {{desc=Efun f;loc=($startpos,$endpos)}}
-    |s=structure ";" {{desc=Estruct s;loc=($startpos,$endpos)}}
+    | f=func ";" {{desc=Efun f;loc=($startpos,$endpos)}}
+    | s=structure ";" {{desc=Estruct s;loc=($startpos,$endpos)}}
 
 expr:
     | n=JINT { {desc=Eint n ; loc=($startpos,$endpos)} }
@@ -115,7 +117,8 @@ expr:
     | e1=expr "||" e2=expr {{desc=Ebinop (Bop(Or),e1,e2);loc=($startpos,$endpos)}}
     | "!" e=expr {{desc=Enot e;loc=($startpos,$endpos)}}
 
-    | IF c=expr_bloc el=else_stmt { {desc=IfElse(fst c,snd c,el);loc=($startpos,$endpos)} }
+    | IF c=expr_bloc el=else_stmt { {desc=IfElse(fst c,snd c,el);
+                                    loc=($startpos,$endpos)} }
 
     | s=IDENT_LPAR arg=separated_list(",",expr) ")" {
         match s,arg with
@@ -124,16 +127,17 @@ expr:
             |"div", _ -> assert false (*mauvais nombre d'arguments pour div*)
             |"println", _ -> let en= {desc=Estring "\n"; loc=($startpos,$endpos)} in 
                     (*on gère le sucre syntaxique pour println*)
-                            {desc=Ecall ("print",(arg @ [en]));loc=($startpos,$endpos)}        
-        
+                            {desc=Ecall ("print",(arg @ [en]));loc=($startpos,$endpos)}
         
             |_,_ -> {desc=Ecall (s,arg); loc=($startpos,$endpos)}}
 
     
-    | RETURN e=ioption(expr) {{desc=Ereturn e; loc=($startpos,$endpos)}} /*j'ai très peur des conflits que ça va provoquer*/
+    | RETURN e=ioption(expr) {{desc=Ereturn e; loc=($startpos,$endpos)}}
+    /*j'ai très peur des conflits que ça va provoquer*/
 
     
-    | FOR x=IDENT "=" e1=expr ":" c=expr_bloc END {{desc=Efor(x,e1,fst c,snd c); loc=($startpos,$endpos)}}
+    | FOR x=IDENT "=" e1=expr ":" c=expr_bloc END {{desc=Efor(x,e1,fst c,snd c);
+                                                   loc=($startpos,$endpos)}}
     | e=while_c b=bloc END {{desc=Ewhile (e,b); loc=($startpos,$endpos)}}
 
 while_c:
@@ -149,7 +153,8 @@ value: /*valeurs gauches*/
 
 
 int_lpar:
-    n=INT_LPAR {{desc= Eint n;loc=($startpos,$endpos)}} /*pour récupérer la position de n*/
+    n=INT_LPAR {{desc= Eint n;loc=($startpos,$endpos)}}
+    /*pour récupérer la position de n*/
 
 rpar_ident:
     s=RPAR_IDENT {{desc=Evar s;loc=($startpos,$endpos)}} /*de même*/
@@ -159,11 +164,13 @@ else_stmt:
     | ELSE b=bloc END { match b with
             |[] ->b
             |e::q->begin match e.desc with
-                    |IfElse(_,_,_) -> assert false (*le bloc commence par un if, on a donc else if, 
+                    |IfElse(_,_,_) -> assert false
+                    (*le bloc commence par un if, on a donc else if, 
                     c'est une erreur de syntaxe*)
                     |_ ->b end}
 
-    | ELSEIF c=expr_bloc el=else_stmt { [{desc=IfElse (fst c,snd c,el);loc=($startpos,$endpos)}] }
+    | ELSEIF c=expr_bloc el=else_stmt { [{desc=IfElse (fst c,snd c,el);
+                                        loc=($startpos,$endpos)}] }
 
 bloc:
     | ";"* {[]} /*fin de bloc avec autant de ; que nécessaire, y compris aucun
