@@ -43,7 +43,7 @@ let () =
     close_in c;
     if !parse_only then exit 0;
     
-    (*Printer.print_file ast*)
+    Printer.print_file ast
     (*let f_typ=Typer.typing f in
     if !type_only then exit 0;
     puis production de code*)

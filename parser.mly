@@ -191,10 +191,10 @@ bloc1:
     | e=expr ";" b=bloc {{desc=Eblock (e::b); loc=($startpos,$endpos)}}
 
 func:
-      FUNCTION f=IDENT_LPAR p=separated_list(",",param) ")" b=bloc END {
-        {fname=f ; fpar=p; ftype=Tany ; finstr= b}}
-    |FUNCTION f=IDENT_LPAR p=separated_list(",",param) ")" "::" t=IDENT b=bloc END {
-        {fname=f ; fpar=p; ftype=Ast.type_of_string t ; finstr= b}}
+    | FUNCTION f=IDENT_LPAR p=separated_list(",",param) ")" b=bloc END
+      {{fname=f ; fpar=p; ftype=Tany ; finstr= b}}
+    | FUNCTION f=IDENT_LPAR p=separated_list(",",param) ")" "::" t=IDENT b=bloc END
+      {{fname=f ; fpar=p; ftype=Ast.type_of_string t ; finstr= b}}
 
 structure:
       STRUCT s=IDENT p=param_list END {
