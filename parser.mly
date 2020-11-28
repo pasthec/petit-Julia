@@ -27,11 +27,11 @@ exception Parse_error
 %token INF "<"
 %token SUPEQ ">="
 %token SUP ">"
-%token <int> JINT
+%token <Int64.t> JINT
 %token <string> IDENT
 %token <string> JSTRING
-%token <int*string> INT_IDENT
-%token <int> INT_LPAR
+%token <Int64.t*string> INT_IDENT
+%token <Int64.t> INT_LPAR
 %token <string> RPAR_IDENT
 %token <string> IDENT_LPAR
 %token LPAR "("
@@ -49,6 +49,7 @@ exception Parse_error
 
 %type <Ast.file> file
 
+%nonassoc exp 
 %nonassoc WHILE FOR
 %nonassoc RETURN
 %nonassoc IF
@@ -117,7 +118,7 @@ expr:
     | e1=expr "||" e2=expr {{desc=Ebinop (Bop(Or),e1,e2);loc=($startpos,$endpos)}}
     | "!" e=expr {{desc=Enot e;loc=($startpos,$endpos)}}
 
-    | IF c=expr_bloc el=else_stmt { {desc=IfElse(fst c,snd c,el);
+    | e=if_c b=bloc el=else_stmt { {desc=IfElse(e,b,el);
                                     loc=($startpos,$endpos)} }
 
     | s=IDENT_LPAR arg=separated_list(",",expr) ")" {
@@ -133,18 +134,24 @@ expr:
 
     
     | RETURN e=ioption(expr) {{desc=Ereturn e; loc=($startpos,$endpos)}}
-    /*j'ai très peur des conflits que ça va provoquer*/
+
 
     
-    | FOR x=IDENT "=" e1=expr ":" c=expr_bloc END {{desc=Efor(x,e1,fst c,snd c);
+    | FOR x=IDENT "=" e1=expr e2=colon_expr b=bloc END {{desc=Efor(x,e1,e2,b);
                                                    loc=($startpos,$endpos)}}
     | e=while_c b=bloc END {{desc=Ewhile (e,b); loc=($startpos,$endpos)}}
 
 while_c:
-    WHILE e=expr {e} /*je suis désespéré*/
+    WHILE e=expr %prec exp {e}   /*fait à part et avec une précédence déclarée pour résoudre les conflits*/
 
-expr_bloc:
-    e=expr b=bloc {(e,b)} /*a réglé certains conflits par magie, n'en règle pas d'autres pour la même raison*/
+if_c:
+    IF e=expr %prec exp {e}
+
+elseif_c:
+    ELSEIF e=expr %prec exp {e}
+
+colon_expr:
+    ":" e=expr %prec exp {e}
 
 
 value: /*valeurs gauches*/
@@ -169,7 +176,7 @@ else_stmt:
                     c'est une erreur de syntaxe*)
                     |_ ->b end}
 
-    | ELSEIF c=expr_bloc el=else_stmt { [{desc=IfElse (fst c,snd c,el);
+    | e=elseif_c b=bloc el=else_stmt { [{desc=IfElse (e,b,el);
                                         loc=($startpos,$endpos)}] }
 
 bloc:

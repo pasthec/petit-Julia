@@ -14,7 +14,7 @@ type loc= Lexing.position * Lexing.position
 type expr ={desc : desc; loc : loc}
 
 and desc =
-    Eint of int 
+    Eint of Int64.t 
   | Estring of string
   | Ebool of bool
   | Evar of ident 
