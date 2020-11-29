@@ -45,10 +45,9 @@ let first_search_fun f funs structs=
 
   (*vérifie que les types arguments et résultats de f sont bien formés, sachant quelles sont les structures déjà déclarées
   et renvoie le nouveau dictionnaire des fonctions
-  
-  En fait c'est faux, plusieurs fonctions peuvent avoir le même nom
-  
-  Les lier à des listes ? *)
+   *)
+
+  if Smap.mem (f.fname) structs then error (f.floc,f.fname^" is already a structure. It cannot denote a function.");
 
   let well_formed t loc= (*vérifie qu'un type t dans une déclaration de fonction est bien formé
                         sachant que les structures déjà déclarées sont s
@@ -92,11 +91,13 @@ let first_search_fun f funs structs=
 
   (*soit on a déjà une fonction de même nom et on ajoute celle-là, soit on crée la lsite singleton*)
 
-let first_search_struct s structs fields_of_structs= 
+let first_search_struct s funs structs fields_of_structs= 
 
   (*appliqué à une structure s, sachant que les structures précédentes sont structs et les champs fields_of_struct
   vérifie que les champs de s sont bien formés et renvoie les nouveaux structs et fields_of_structs*)
   if Smap.mem (s.sname) structs then error (s.sloc,"multiple structures with name "^(s.sname));
+
+  if Smap.mem (s.sname) funs then error (s.sloc,s.sname^" is already a function. It cannot be a structure.");
 
   let well_formed t loc =
     (*si t bien formé, on ne fait rien, sinon on lève une erreur*)
@@ -164,7 +165,7 @@ let first_search ast= (*construit l'environnement constitué des structures,
     let search_decl (vars,funs,structs,fields_of_structs) d=
        match d with 
         | Func f -> vars, first_search_fun f funs structs, structs, fields_of_structs
-        | Struct s -> let c =first_search_struct s structs fields_of_structs in 
+        | Struct s -> let c =first_search_struct s funs structs fields_of_structs in 
                       vars, funs, fst c, snd c
 
         | Expr e -> first_search_expr vars e,funs,structs,fields_of_structs (*pour que ça compile, c'est faux bien sûr*)
