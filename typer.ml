@@ -77,9 +77,17 @@ let first_search_fun f funs structs=
 
   in well_formed f.ftype (f.floc); (*même vérification pour le type de retour*)
   
-  
+  let compare_entry_types fp = (*renvoie une erreur si fp a exactement les mêmes types d'entrée que f*)
+    
+    try 
+      if not(List.exists2 (fun t1 -> fun t2 -> t1<>t2) l (fp.tfarg) ) then 
+        error (f.floc,f.fname^" is already a function with same entry types.")
+    with Invalid_argument _ -> ()
 
-  try Smap.add (f.fname) ({tfarg=l ; tfres = f.ftype}::(Smap.find (f.fname) funs)) funs
+  in 
+  try let fs=Smap.find (f.fname) funs in
+      List.iter compare_entry_types fs ;
+      Smap.add (f.fname) ({tfarg=l ; tfres = f.ftype}::fs) funs
   with Not_found -> (Smap.add (f.fname) [{tfarg=l ; tfres = f.ftype}] funs)
 
   (*soit on a déjà une fonction de même nom et on ajoute celle-là, soit on crée la lsite singleton*)
