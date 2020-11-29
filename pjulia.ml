@@ -59,11 +59,11 @@ let () =
 	exit 1
     | Typer.Type_error (loc,given,expected) ->(*mauvais type*)
   report loc;
-	eprintf "this expression has type %s but was expected to have type %s" given expected;
+	eprintf "this expression has type %s but was expected to have type %s@." given expected;
   exit 1
     |Typer.Error (loc,s)->(*autre erreur détectée par le typeur*)
   report loc;
-  eprintf "Error: %s" s;
+  eprintf "Error: %s@." s;
   exit 1
     | e ->
 	eprintf "Anomaly: %s\n@." (Printexc.to_string e); (*erreur inattendue du compilateur, inch'allah ça sert à rien*)

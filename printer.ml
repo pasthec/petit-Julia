@@ -29,7 +29,9 @@ let rec pprint fmt e =
     | Ecall (f,args) -> fprintf fmt "%s(%a)" f pprintl (",",args)
     | Earg(e,x) -> fprintf fmt "%a.%s" pprint e.desc x
     | Eaffect(e1,e2) -> fprintf fmt "%a=%a" pprint e1.desc pprint e2.desc
-    | Ereturn e -> fprintf fmt "return ?"
+    | Ereturn None -> fprintf fmt "return "
+    | Ereturn (Some e) -> fprintf fmt "return ";
+                        pprint fmt e.desc
     | Efor(i,e1,e2,b) -> fprintf fmt "for %s=%a:%a\n@[%a@]" i pprint e1.desc
                             pprint e2.desc pprintl ("\n",b)
     | Ewhile(e,b) -> fprintf fmt "while %a do\n@[%a@]" pprint e.desc pprintl ("\n",b)
