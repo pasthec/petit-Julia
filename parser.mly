@@ -72,9 +72,9 @@ file:
     | d=decl* EOF { d }
 
 decl:
-    | e=expr ";" { e }
-    | f=func ";" {{desc=Efun f;loc=($startpos,$endpos)}}
-    | s=structure ";" {{desc=Estruct s;loc=($startpos,$endpos)}}
+    | e=expr ";" { Expr e }
+    | f=func ";" {Func f}
+    | s=structure ";" {Struct s}
 
 expr:
     | n=JINT { {desc=Eint n ; loc=($startpos,$endpos)} }
@@ -192,22 +192,23 @@ bloc1:
 
 func:
     | FUNCTION f=IDENT_LPAR p=separated_list(",",param) ")" b=bloc END
-      {{fname=f ; fpar=p; ftype=Tany ; finstr= b}}
+      {{fname=f ; fpar=p; ftype=Tany ; finstr= b ; floc=($startpos,$endpos)}}
     | FUNCTION f=IDENT_LPAR p=separated_list(",",param) ")" "::" t=IDENT b=bloc END
-      {{fname=f ; fpar=p; ftype=Ast.type_of_string t ; finstr= b}}
+      {{fname=f ; fpar=p; ftype=Typer.type_of_string t ; finstr= b ; floc=($startpos,$endpos)}}
 
 structure:
       STRUCT s=IDENT p=param_list END {
-        {smut=false; sname=s; spar= p}
+        {smut=false; sname=s; spar= p ; sloc=($startpos,$endpos)}
     }
 
     | MUTABLE STRUCT s=IDENT p=param_list END {
-        {smut=true; sname=s; spar=p}
+        {smut=true; sname=s; spar=p ; sloc=($startpos,$endpos)}
     }
 
 param:
-     s=IDENT {{pname=s; ptype=Tany}} /*sucre syntaxique : l'omission d'un type équivaut au type Any*/
-    |s=IDENT "::" t=IDENT {{pname=s; ptype=Ast.type_of_string t}}
+     s=IDENT {{pname=s; ptype=Tany ; ploc=($startpos,$endpos)}} 
+        /*sucre syntaxique : l'omission d'un type équivaut au type Any*/
+    |s=IDENT "::" t=IDENT {{pname=s; ptype=Typer.type_of_string t ; ploc=($startpos,$endpos)}}
 
 
 param_list:

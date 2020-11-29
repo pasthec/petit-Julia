@@ -43,7 +43,8 @@ let () =
     close_in c;
     if !parse_only then exit 0;
     
-    Printer.print_file ast
+    Printer.print_file ast;
+    Typer.typing ast
     (*let f_typ=Typer.typing f in
     if !type_only then exit 0;
     puis production de code*)
@@ -60,9 +61,9 @@ let () =
   report loc;
 	eprintf "this expression has type %s but was expected to have type %s" given expected;
   exit 1
-    |Typer.Unbound_value (loc,s)->(*variable non déclarée, c'est le typeur qui s'en aperçoit*)
+    |Typer.Error (loc,s)->(*autre erreur détectée par le typeur*)
   report loc;
-  eprintf "unbound value %s" s;
+  eprintf "Error: %s" s;
   exit 1
     | e ->
 	eprintf "Anomaly: %s\n@." (Printexc.to_string e); (*erreur inattendue du compilateur, inch'allah ça sert à rien*)

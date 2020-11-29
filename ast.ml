@@ -22,8 +22,6 @@ and desc =
   | Enot of expr 
   | Eminus of expr
   | IfElse of expr*bloc*bloc
-  | Efun of func (*déclaration de fonction*)
-  | Estruct of structure (*déclaration de type*)
   | Ecall of ident*expr list (*appel de fonction*)
   | Earg of expr*ident (*champ d'une structure, Earg (e,x)=e.x *)
   | Eaffect of expr*expr (*affectation e1=e2, l'analyseur syntaxique garantit que e1 est une valeur gauche*)
@@ -34,28 +32,21 @@ and desc =
 
 and bloc = expr list
 
-and param = {pname : ident; ptype : typ }
+type typ = 
+  Tint64 
+| Tnothing
+| Tbool
+| Tstring
+| Tany
+| Tstruct of string
 
-and typ = 
-    Tint64 
-  | Tnothing
-  | Tbool
-  | Tstring
-  | Tany
-  | Tstruct of string
-  | Tfun of typ list*typ list
+type param = {pname : ident; ptype : typ ; ploc : loc }
 
-and func = { fname : ident ; fpar : param list ; ftype : typ; finstr : expr list }
+and func = { fname : ident ; fpar : param list ; ftype : typ; finstr : expr list ; floc : loc }
 
-and structure = { smut : bool ; sname : ident ; spar : param list}
+and structure = { smut : bool ; sname : ident ; spar : param list ; sloc : loc }
 
-type file = expr list 
+type decl = Expr of expr | Func of func | Struct of structure 
 
-let type_of_string s=
-  match s with
-   "Int64" -> Tint64
-  |"Any" -> Tany
-  |"Nothing" -> Tnothing
-  |"Bool" -> Tbool
-  |"String" -> Tstring
-  |_ -> Tstruct s
+type file = decl list 
+

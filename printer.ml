@@ -26,10 +26,6 @@ let rec pprint fmt e =
     | Eminus e -> fprintf fmt "-%a" pprint e.desc
     | IfElse(e,b1,b2) -> fprintf fmt "if %a then {\n%a}\n else {\n%a}" pprint e.desc
                                       pprintl ("\n",b1) pprintl ("\n",b2)
-    | Efun f -> fprintf fmt "function %s(%a)\n@[%a@]end" f.fname pprintparam
-                                                (", ",f.fpar) pprintl ("\n",f.finstr)
-    | Estruct s -> fprintf fmt "struct %s\n@[%a]@end" s.sname pprintparam
-                                                                      ("\n",s.spar)
     | Ecall (f,args) -> fprintf fmt "%s(%a)" f pprintl (",",args)
     | Earg(e,x) -> fprintf fmt "%a.%s" pprint e.desc x
     | Eaffect(e1,e2) -> fprintf fmt "%a=%a" pprint e1.desc pprint e2.desc
@@ -47,4 +43,19 @@ and pprintparam fmt (sep,p) = begin match p with
     | [] -> fprintf fmt ""
     | x::q -> fprintf fmt "%s%s%a" x.pname sep pprintparam (sep,q)
     end    
-let print_file ast = List.iter (fun d -> printf "%a" pprint d.desc; print_newline ()) ast
+
+and pprintfun fmt f=
+    fprintf fmt "function %s(%a)\n@[%a@]end" f.fname pprintparam
+        (", ",f.fpar) pprintl ("\n",f.finstr)
+
+and pprintstruct fmt s =
+        fprintf fmt "struct %s\n@[%a]@end" s.sname pprintparam
+            ("\n",s.spar)
+
+let pprintdecl fmt d=
+    match d with 
+    | Expr e -> pprint fmt e.desc
+    | Func f -> pprintfun fmt f
+    | Struct s -> pprintstruct fmt s
+
+let print_file ast = List.iter (fun d -> printf "%a" pprintdecl d; print_newline ()) ast
