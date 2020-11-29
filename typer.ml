@@ -19,9 +19,9 @@ module Smap=Map.Make(String)
 module Sset=Set.Make(String)
 
 
-type tfun={tfarg : typ list ; tfres : typ}
+type tfun={tfarg : (string*typ) list ; tfres : typ}
 
-type tstruct={tsmut : bool; tsfields : typ Smap.t}
+type tstruct={tsmut : bool; tsfields : (string*typ) list }
 
 let type_of_string s=
   match s with
@@ -67,7 +67,7 @@ let first_search_fun f funs structs=
     | [] ->[]
     | p::q -> well_formed (p.ptype) (p.ploc);
             if Sset.mem (p.pname) set then error (p.ploc,"multiple arguments with name "^p.pname);
-            (p.ptype)::(expl_param (Sset.add p.pname set) q)
+            (p.pname,p.ptype)::(expl_param (Sset.add p.pname set) q)
 
   in let l=expl_param (Sset.empty) (f.fpar)
 
@@ -107,19 +107,23 @@ let first_search_struct s structs fields_of_structs=
 
   in 
 
-  let expl_param (sargs,fields) p =
+  let rec expl_param fields p_l =
     (*ajoute le paramètre p et son type au dictionnaire des paramètres de s, 
         et (s,type(p)) au dictionnaire des structures possédant le champ p *)
+    match p_l with 
+      | [] ->[],fields
+      | p::q -> 
+              well_formed (p.ptype) (p.ploc);
 
-      well_formed (p.ptype) (p.ploc);
+              if Smap.mem (p.pname) fields then error(p.ploc,"already used field "^(p.pname));
 
-      if Smap.mem (p.pname) fields then error(p.ploc,"already used field "^(p.pname));
+              (*on n'a le droit qu'à une structure par nom de champ*)
+            let l,f=expl_param (Smap.add (p.pname) (s.sname) fields) q in 
 
-    (*on n'a le droit qu'à une structure par nom de champ*)
+            (p.pname,p.ptype)::l,f
+     
 
-      (Smap.add (p.pname) (p.ptype) sargs,Smap.add (p.pname) (s.sname) fields)
-
-  in let sargs,fields=List.fold_left expl_param (Smap.empty,fields_of_structs) s.spar
+  in let sargs,fields=expl_param fields_of_structs s.spar
 
  in Smap.add (s.sname) {tsmut=s.smut; tsfields= sargs} structs,fields
 
