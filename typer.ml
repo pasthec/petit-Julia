@@ -112,6 +112,61 @@ let first_search ast= (*construit l'environnement constitué des structures,
     in 
     List.fold_left search_decl (vars,funs,structs,fields_of_structs) ast
 
+let compatible t t' =
+    t=Tany || t'=Tany || t=t'
+
+let rec local_env env b = env (* on construit l'environnement à l'intérieur de f *)
+    (* maintenant qu'on sait à quoi ça sert il faut le faire *)
+
+let type_expr env e = Tany (* donne le type d'une expression *)
+
+let rec type_block env b = (* donne le type d'un bloc *)
+    let (vars,funs,structs,fields_of_structs) = env in
+    match b with
+    | [] -> Tnothing
+    | [e] -> type_expr env e
+    | e::q ->
+            begin match e.desc with
+                | Eaffect({desc=Evar x; loc=_},f) -> let t = type_expr env f in
+                  type_block (Smap.add x (type_expr env f) vars,funs,structs,
+                                                           fields_of_structs) q
+                | _ -> type_expr env e
+            end
+
+let check_returns t b = () (* vérifie que les return d'un bloc sont bien de type t *)
+
+let check_func (vars,funs,structs,fields_of_structs) f = 
+    
+    let rec add_params vars = function
+        | [] -> vars
+        | p::q -> Smap.add p.pname p.ptype (add_params vars q)
+    in
+
+    let envf = local_env (add_params vars f.fpar,funs,structs,fields_of_structs)
+    f.finstr in
+
+    let tb = type_block envf f.finstr in
+    let tres = (Smap.find f.fname funs).tfres in
+    if not (compatible tb tres) then
+        error (f.floc, "Function "^(f.fname)^
+        " expected to have some type but has another")
+
+    (* à remplacer par Type_error (loc,given,expected) une fois qu'on aura un
+     * string_of_type *)
+
+    check_returns tres f.finstr 
+
+let check_expr env e = ()
+
+let second_search ast env = (*On type le corps des fonctions et des expressions et on
+                              vérifie qu'ils conviennent avec l'environnement global *)
+    let check_decl env d = match d with
+        | Func f -> check_func env f
+        | Expr e -> check_expr env e
+        | _ -> ()
+
+   in List.iter (check_decl env) ast
+
 let typing f=
   let env=first_search f in 
 
