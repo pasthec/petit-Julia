@@ -21,7 +21,7 @@ module Sset=Set.Make(String)
 
 type tfun={tfarg : typ list ; tfres : typ}
 
-type tstruct={tspar : typ Smap.t}
+type tstruct={tsmut : bool; tsfields : typ Smap.t}
 
 let type_of_string s=
   match s with
@@ -121,7 +121,7 @@ let first_search_struct s structs fields_of_structs=
 
   in let sargs,fields=List.fold_left expl_param (Smap.empty,fields_of_structs) s.spar
 
- in Smap.add (s.sname) sargs structs,fields
+ in Smap.add (s.sname) {tsmut=s.smut; tsfields= sargs} structs,fields
 
 
 let const_type e vars=
