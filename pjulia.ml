@@ -35,6 +35,8 @@ let report (b,e) = (*affiche la première ligne de l'erreur, avec la localisatio
   let lc = e.pos_cnum - b.pos_bol + 1 in
   eprintf "File \"%s\", line %d, characters %d-%d:\n" file l fc lc
 
+
+  
 let () =
   let c = (if file = "stdin" then stdin else open_in file ) in
   let lb = Lexing.from_channel c in
@@ -44,10 +46,11 @@ let () =
     if !parse_only then exit 0;
     
     Printer.print_file ast;
-    Typer.typing ast
-    (*let f_typ=Typer.typing f in
-    if !type_only then exit 0;
-    puis production de code*)
+
+    let f=Typer.typing ast in 
+    if !type_only then exit 0
+
+    (*puis production de code*)
   with
     | Lexer.Lexing_error s -> (*erreur lexicale*)
 	report (lexeme_start_p lb, lexeme_end_p lb);

@@ -99,8 +99,8 @@ expr:
     | e1=expr IDIV e2=expr { {desc=Ebinop (Ar(Div), e2, e1);loc=($startpos,$endpos)} }
     | e1=expr "%" e2=expr { {desc=Ebinop (Ar(Mod), e1, e2);loc=($startpos,$endpos)} }
     | e1=expr "^" e2=expr { {desc=Ebinop (Ar(Exp), e1, e2);loc=($startpos,$endpos)} }
-    | e1=expr "==" e2=expr { {desc=Ebinop (Comp(Equal), e1, e2);loc=($startpos,$endpos)} }
-    | e1=expr "!=" e2=expr { {desc=Ebinop (Comp(Different), e1, e2);loc=($startpos,$endpos)} }
+    | e1=expr "==" e2=expr { {desc=Ebinop (Eq(Equal), e1, e2);loc=($startpos,$endpos)} }
+    | e1=expr "!=" e2=expr { {desc=Ebinop (Eq(Different), e1, e2);loc=($startpos,$endpos)} }
     | e1=expr "<=" e2=expr { {desc=Ebinop (Comp(Infeq), e1, e2);loc=($startpos,$endpos)} }
     | e1=expr "<" e2=expr { {desc=Ebinop (Comp(Inf), e1, e2);loc=($startpos,$endpos)} }
     | e1=expr ">=" e2=expr { {desc=Ebinop (Comp(Supeq), e1, e2);loc=($startpos,$endpos)} }

@@ -1,13 +1,15 @@
 type ident = string
 
-type compare_op = Equal | Different | Infeq | Inf | Supeq | Sup
+type compare_op =  Infeq | Inf | Supeq | Sup
+
+type eq_op = Equal | Different
 
 type bool_op = And | Or 
 
 type arith_op = Plus | Minus | Times | Div | Exp | Mod 
 
-type binop = Comp of compare_op | Bop of bool_op | Ar of arith_op 
-(*opérateurs binaires, je sépare pour que ça soit peut-etre plus simple pour l'interpréteur ? *)
+type binop = Comp of compare_op | Bop of bool_op | Ar of arith_op | Eq of eq_op
+(*opérateurs binaires, on sépare pour factoriser dans le typeur *)
 
 type loc= Lexing.position * Lexing.position
 
