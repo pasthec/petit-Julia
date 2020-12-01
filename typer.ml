@@ -46,6 +46,8 @@ let string_of_type t =
 let terror (loc,g,e)=
   raise (Type_error(loc,string_of_type g,string_of_type e))
 
+type tbinding={mutable t : typ }
+
 type texpr = {ttype : typ ; tdesc : tdesc}
 
 and tdesc =
@@ -68,6 +70,7 @@ and tdesc =
 
 
 type tfile=Te of texpr | Tf of func | Ts of structure
+
 
 
 let first_search_fun f funs structs=
@@ -149,6 +152,7 @@ let first_search_struct s funs structs fields_of_structs=
 
               (*on n'a le droit qu'à une structure par nom de champ*)
             let l,f=expl_param (Smap.add (p.pname) (s.sname) fields) q in 
+            let l,f=expl_param (Smap.add (p.pname) (s.sname,p.ptype) fields) q in 
 
             (p.pname,p.ptype)::l,f
      
@@ -172,7 +176,7 @@ let first_search_struct s funs structs fields_of_structs=
 let rec first_search_expr vars e=
     match e.desc with 
     | Eaffect (e1,e2) -> begin match e1.desc with 
-                        | Evar x when not(Smap.mem x vars)-> Smap.add x Tany vars 
+                        | Evar x when not(Smap.mem x vars)-> Smap.add x {t=Tany} vars 
                         (*| Evar x -> (let t =Smap.find x vars in 
                                     match t,const_type e2 vars with 
                                     | Tany,t2 -> Smap.add x (t2) vars 
@@ -181,12 +185,19 @@ let rec first_search_expr vars e=
                                     | _,t2 -> raise (Type_error(e2.loc,string_of_type t2,string_of_type t)))*)
                         | _ -> vars end 
     | Eblock b-> List.fold_left first_search_expr vars b 
+    | IfElse (e1,b1,b2) -> let v1= first_search_expr vars e1 in 
+                          let v2=List.fold_left first_search_expr v1 b1 in 
+                          List.fold_left first_search_expr v2 b2 
+    | Ebinop (_,e1,e2) -> List.fold_left first_search_expr vars [e1;e2]
+    | Enot e1 -> first_search_expr vars e1 
+    | Eminus e1 -> first_search_expr vars e1 
+    | Ereturn (Some e1) -> first_search_expr vars e1  
     | _ -> vars 
 
 let first_search ast= (*construit l'environnement constitué des structures, 
     des déclarations de fonctions et des variables globales*)
 
-    let vars=Smap.singleton "nothing" Tnothing and funs=Smap.empty and structs=Smap.empty 
+    let vars=Smap.singleton "nothing" {t=Tnothing} and funs=Smap.empty and structs=Smap.empty 
     (*variables globales, fonctions et structures*)
     and fields_of_structs= Smap.empty in (*champs apparaissant dans des structures*)
 
@@ -210,12 +221,40 @@ let assert_compatible t t_c t_c_loc= (*type qu'on veut, type que l'on a, localis
   (*lève une erreur si lexpression de type t_c situé à la localisation t_c_loc n'est pas compatible avec le type t*)
   if not(compatible t t_c) then terror(t_c_loc,t_c,t)
 
+ 
+let rec local_env loc_sup loc e = 
+  (*va récursivement chercher les variables locales déclarées au niveau k connaissant celles au niveau k-1
+   Si une variable est déjà locale au niveau k-1, on ne l'ajoute pas
+   A appeler en premier lieu avec loc=Smap.empty pour l'"initialisation" du parcours récursif*)
+  match e.desc with 
+    | Eaffect (e1,e2) -> begin match e1.desc with 
+                        | Evar x when not(Smap.mem x loc_sup)-> Smap.add x Tany loc 
+                        (*| Evar x -> (let t =Smap.find x vars in 
+                                    match t,const_type e2 vars with 
+                                    | Tany,t2 -> Smap.add x (t2) vars 
+                                    | _, Tany -> vars 
+                                    | _,t2 when t=t2 -> vars 
+                                    | _,t2 -> raise (Type_error(e2.loc,string_of_type t2,string_of_type t)))*)
+                        | _ -> loc end 
+    | Eblock b-> List.fold_left (local_env loc_sup) loc b 
+    | IfElse (e1,b1,b2) -> let v1= local_env loc_sup loc e1 in 
+                          let v2=List.fold_left (local_env loc_sup) v1 b1 in 
+                          List.fold_left (local_env loc_sup) v2 b2 
+    | Ebinop (_,e1,e2) -> List.fold_left (local_env loc_sup) loc [e1;e2]
+    | Enot e1 -> local_env loc_sup loc e1 
+    | Eminus e1 -> local_env loc_sup loc e1
+    | Ereturn (Some e1) -> local_env loc_sup loc e1
+    | _ -> loc
 
-let rec local_env env b = env (* on construit l'environnement à l'intérieur de f *)
-    (* maintenant qu'on sait à quoi ça sert il faut le faire *)
+
+let fc k v1 v2 = v1 (*fonction nécessaire comme argument de l'union
+                    sert pour le cas d'égalité, mais inutile car les environnements 
+                    que l'on unit sont par construction disjoints*)
 
 let rec type_expr env e = (*renvoie la nouvelle expression avec son type dans le nouvel ast*)
-  
+  let varsglob,varsloc,funs,structs,fields=env in (*vars loc est l'environnement des variables locales supérieures, loc_spec 
+                                        celui des variables qui naissent et meurent avec l'expression 
+                                        Ils sont nécessairement disjoints*)
   match e.desc with 
   | Eint n -> {ttype= Tint64; tdesc= TEint n}
   | Ebool b -> {ttype= Tbool; tdesc= TEbool b}
@@ -226,19 +265,26 @@ let rec type_expr env e = (*renvoie la nouvelle expression avec son type dans le
 
   | Ebinop(Ar(op),e1,e2) -> let t1=type_expr env e1 in 
                           assert_compatible Tint64 t1.ttype e1.loc;
+
                           let t2=type_expr env e2 in 
                           assert_compatible Tint64 t2.ttype e2.loc;
+
                           {ttype=Tint64; tdesc= TEbinop(Ar(op),t1,t2)}
-  | Ebinop(Comp(op),e1,e2) -> let t1=type_expr env e1 in 
+
+  | Ebinop(Comp(op),e1,e2) ->let t1=type_expr env e1 in 
                             assert_compatible Tint64 t1.ttype e1.loc;
+
                             let t2=type_expr env e2 in 
                             assert_compatible Tint64 t2.ttype e2.loc;
+
                             {ttype=Tbool; tdesc= TEbinop(Comp(op),t1,t2)}
 
   | Ebinop(Bop(op),e1,e2)-> let t1=type_expr env e1 in 
                           assert_compatible Tbool t1.ttype e1.loc;
+
                           let t2=type_expr env e2 in 
                           assert_compatible Tbool t2.ttype e2.loc;
+
                           {ttype=Tbool; tdesc= TEbinop(Bop(op),t1,t2)}     
 
   | Ebinop (Eq(op),e1,e2) -> let t1=type_expr env e1 in 
@@ -246,22 +292,72 @@ let rec type_expr env e = (*renvoie la nouvelle expression avec son type dans le
                             let t2=type_expr env e2 in (*aucune contrainte sur la relation entre deux types pour 
                               une comparaison*)
                             
-                          {ttype=Tint64; tdesc= TEbinop(Eq(op),t1,t2)}
+                          {ttype=Tbool; tdesc= TEbinop(Eq(op),t1,t2)}
 
   | Eminus e1 -> let t1=type_expr env e1 in 
               assert_compatible Tint64 t1.ttype e1.loc;
+
               {ttype= Tint64; tdesc= TEminus t1}
 
   | Enot e1 -> let t1=type_expr env e1 in 
               assert_compatible Tbool t1.ttype e1.loc;
+
               {ttype= Tbool; tdesc=TEnot t1}
-                  
+
+  | Eaffect(e1,e2) -> begin match e1.desc with 
+                      | Evar x -> (let te=type_expr env e2 
+                                  and tx=(try Smap.find x varsloc 
+                                          with Not_found-> try Smap.find x varsglob
+                                        with Not_found -> error(e1.loc,"Unbound value "^x))
+
+                            in match tx.t with
+                            |Tany -> tx.t <- te.ttype; (*si c'est un Any, on prend en compte l'affectation*)
+                                    let xp={ttype=te.ttype; tdesc=TEvar x}
+
+                                    in {ttype=te.ttype; tdesc=TEaffect(xp,te)}
+
+                            |_ -> assert_compatible tx.t te.ttype e2.loc ;
+                            let xp={ttype=tx.t; tdesc=TEvar x} in 
+                            {ttype=te.ttype; tdesc=TEaffect(xp,te)} )
+
+                      | Earg (e3,x) -> (let te2=type_expr env e2 
+                                      and te3=type_expr env e3 in
+
+                                    let s,tx=(try Smap.find x fields 
+                                              with Not_found -> error (e1.loc,"No such field "^x))
+                                      (*on cherche quel est la structure qui a pour champ x et le type associé, on échoue si elle n'existe pas*)
+                        
+                                    in assert_compatible (Tstruct s) te3.ttype e3.loc;
+                                    (*on vérifie que e3 est bien de type compatible avec cette structure*)
+                                    assert_compatible tx te2.ttype e2.loc;
+                                    (*et que e2 l'est avec s.x*)
+
+                                    let te1={ttype=tx; tdesc= TEarg(te3,x)} in 
+                                    {ttype=te3.ttype;tdesc= TEaffect(te1,te2)})
+                      |_ -> failwith "impossible matching case given the parser" end 
+
+  | Evar x -> let tx=(try Smap.find x varsloc 
+                      with Not_found-> try Smap.find x varsglob
+                      with Not_found -> error(e.loc,"Unbound value "^x))
+                      
+                    in {ttype=tx.t; tdesc= TEvar x} (*pas redondant avec les cas précédents, car au-dessus on doit 
+                                faire l'affectation et la modification de l'environnement*)
+
+  | Earg(e1,x) -> let s,tx=(try Smap.find x fields 
+                  with Not_found -> error (e1.loc,"No such field "^x))
+
+                in let te1= type_expr env e1 in 
+
+                assert_compatible (Tstruct s) te1.ttype e1.loc;
+
+                {ttype= tx; tdesc= TEarg(te1,x)}
+
   | _ -> {ttype=Tnothing;tdesc=TEbool true } (* provoquera une erreur de compatibilité pour nous indiquer 
                   que quelque chose n'est pas encore implémenté *)
 
 and type_block env b = (* donne le bloc dans le nouvel ast, transformé en un TEblock, avec son type *)
-    
-    let rec expl env b =
+    {ttype=Tnothing; tdesc=TEblock []}
+    (*let rec expl env b =
       let (vars,funs,structs,fields_of_structs) = env in
         match b with
         | [] -> Tnothing,[]
@@ -279,7 +375,7 @@ and type_block env b = (* donne le bloc dans le nouvel ast, transformé en un TE
                                                     in ty,e1::l
                     | _ -> let ty,l=expl env q in ty,(type_expr env e)::l
                 end
-    in let ty,l=expl env b in {ttype=ty; tdesc=TEblock l}
+    in let ty,l=expl env b in {ttype=ty; tdesc=TEblock l}*)
 
 and check_returns t b = () (* vérifie que les return d'un bloc sont bien de type t *)
 
@@ -310,10 +406,11 @@ and check_func (vars,funs,structs,fields_of_structs) f = f
   else ()*)
 
 let second_search ast env = (*On type le corps des fonctions et des expressions et on
-                              vérifie qu'ils conviennent avec l'environnement global *)
+                               vérifie qu'ils conviennent avec l'environnement global *)
+    let vars,funs,structs,fields=env in 
     let check_decl env d = match d with
         | Func f -> Tf(check_func env f)
-        | Expr e -> Te(type_expr env e)
+        | Expr e -> Te(type_expr (vars,Smap.empty,funs,structs,fields) e)
         | Struct s -> Ts s
 
    in List.map (check_decl env) ast
