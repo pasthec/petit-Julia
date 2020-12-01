@@ -151,7 +151,6 @@ let first_search_struct s funs structs fields_of_structs=
               if Smap.mem (p.pname) fields then error(p.ploc,"already used field "^(p.pname));
 
               (*on n'a le droit qu'à une structure par nom de champ*)
-            let l,f=expl_param (Smap.add (p.pname) (s.sname) fields) q in 
             let l,f=expl_param (Smap.add (p.pname) (s.sname,p.ptype) fields) q in 
 
             (p.pname,p.ptype)::l,f
