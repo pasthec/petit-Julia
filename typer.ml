@@ -85,9 +85,9 @@ let first_search_fun f funs structs=
 
   if Smap.mem (f.fname) structs then error (f.floc,f.fname^" is already a structure. It cannot denote a function.");
 
-  let well_formed t loc= (*vérifie qu'un type t dans une déclaration de fonction est bien formé
-                        sachant que les structures déjà déclarées sont s
-                        ne fait rien si oui, lève une erreur sinon*)
+  let well_formed t loc= (* vérifie qu'un type t dans une déclaration de fonction est
+                            bien formé sachant que les structures déjà déclarées sont
+                            ne fait rien si oui, lève une erreur sinon*)
     match t with 
       | Tstruct u when Smap.mem u structs ->()
       | Tstruct u -> error (loc,"unbound type"^u) (*erreur à préciser et localiser*)
@@ -423,9 +423,33 @@ let rec type_expr t_return env e = (*renvoie la nouvelle expression avec son typ
                     in let l=expl_param pl s.tsfields in 
                     {ttype=Tstruct name; tdesc=TEcalls (name,l)}
 
-                  with Not_found -> failwith "appel de fonctions à coder"
-  | _ -> {ttype=Tnothing;tdesc=TEbool true } (* provoquera une erreur de compatibilité pour nous indiquer 
-                  que quelque chose n'est pas encore implémenté *)
+                  with Not_found -> (
+                        try let fs = Smap.find name funs in
+
+                        let l = List.map (type_expr t_return env) pl in
+                        (* texpr list *)
+
+                        let fcompatible aux f = (* teste si le type de f est compatible
+                                                   avec celui de la fonction appelée *)
+                            if (try List.fold_left2
+                                    (fun b x (_,y) -> b && (compatible x.ttype y))
+                                    true l f.tfarg
+                                with Invalid_argument _ -> false
+                            ) then f::aux else aux
+                        in
+
+                        let pot_f = List.fold_left fcompatible [] fs in
+
+                        match pot_f with
+                            | [] -> error (e.loc,"No function matches the call type")
+                            | [g] -> {ttype=g.tfres; tdesc=TEcalls(name,l)}
+                            | _ -> error(e.loc,"Ambiguous call to "^name)
+
+                        with Not_found -> error (e.loc,"Unbound function "^name)
+                  )
+
+  | _ -> {ttype=Tnothing;tdesc=TEbool true } (* provoquera une erreur de compatibilité
+  pour nous indiquer que quelque chose n'est pas encore implémenté *)
 
 and type_block t_return env b =(*renvoie le couple type du bloc, listes des expressions dans le nouvel ast*)
       match b with
@@ -445,8 +469,9 @@ and check_func (vars,funs,structs,fields_of_structs) f =
         | (pname,ptype)::q -> Smap.add pname {t=ptype} (add_params vars q)
     in
 
-    let env_par=add_params Smap.empty f.tfarg in
-    let envf = loc_env env_par f.tfinstr f.tfloc in (*variables locales de f, inclut ses paramètres*)
+    let env_par=add_params Smap.empty f.tfarg in (* on commence par ajouter les
+                                                    paramètres à l'environnement *)
+    let envf = loc_env env_par f.tfinstr f.tfloc in (* variables locales de f *)
 
     let t,bp = type_block f.tfres (vars,Smap.union fc envf env_par,funs,structs,fields_of_structs) f.tfinstr in
 
