@@ -4,4 +4,4 @@ pjuliac: ast.ml dune dune-project lexer.mll parser.mly pjulia.ml printer.ml type
 	chmod +w pjuliac
 
 clean:
-	rm -r _build
+	rm -rf _build
