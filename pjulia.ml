@@ -10,10 +10,13 @@ let parse_only = ref false
 
 let type_only = ref false 
 
+let pretty_print = ref false
+
 let spec =
   [
     "--parse-only", Arg.Set parse_only, "  stop after parsing";
-    "--type-only", Arg.Set type_only, " stop after typing"]
+    "--type-only", Arg.Set type_only, " stop after typing";
+    "--pretty-print", Arg.Set pretty_print, " print the ast produced after parsing"]
 
 let file = (*chaîne de caractère avec le nom du fichier passé en argument, vérifie qu'on a bien un .jl*)
   (* (ou éventuellement pour le moment stdin) *)
@@ -45,7 +48,7 @@ let () =
     close_in c;
     if !parse_only then exit 0;
     
-    Printer.print_file ast;
+    if !pretty_print then Printer.print_file ast;
 
     let f=Typer.typing ast in 
     if !type_only then exit 0
