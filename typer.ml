@@ -243,12 +243,12 @@ let loc_env loc_sup b l =
 
                         | _ -> loc_p end
 
-    | Eblock b-> List.fold_left local_env loc b 
+    | Eblock b1-> List.fold_left local_env loc b1 
     | IfElse (e1,b1,b2) -> let v1= local_env loc e1 in 
                           let v2=List.fold_left local_env v1 b1 in 
                           List.fold_left local_env v2 b2 
     | Ebinop (_,e1,e2) -> List.fold_left local_env  loc [e1;e2]
-    | Enot e1 -> local_env  loc e1 
+    | Enot e1 -> local_env loc e1 
     | Eminus e1 -> local_env loc e1
     | Ereturn (Some e1) -> local_env loc e1
     | _ -> loc
@@ -338,6 +338,9 @@ let rec type_expr t_return env e = (*renvoie la nouvelle expression avec son typ
                                     (*on vérifie que e3 est bien de type compatible avec cette structure*)
                                     assert_compatible tx te2.ttype e2.loc;
                                     (*et que e2 l'est avec s.x*)
+
+                                    let ts=Smap.find s structs in 
+                                    if not ts.tsmut then error (e.loc,s^" object is not mutable");
 
                                     let te1={ttype=tx; tdesc= TEarg(te3,x)} in 
                                     {ttype=te3.ttype;tdesc= TEaffect(te1,te2)})
@@ -429,7 +432,7 @@ and type_block t_return env b =(*renvoie le couple type du bloc, listes des expr
         | [] -> Tnothing,[]
         | [e] -> let t=type_expr t_return env e in t.ttype,[t]
         | e::q ->
-                let e1=type_expr t_return env e and t,q1=type_block t_return env b in 
+                let e1=type_expr t_return env e and t,q1=type_block t_return env q in 
                 t,e1::q1
 
 
