@@ -48,7 +48,7 @@ let string_of_type t =
 let terror (loc,g,e)=
   raise (Type_error(loc,string_of_type g,string_of_type e))
 
-type tbinding={mutable t : typ }
+type tbinding={t : typ }
 
 type texpr = {ttype : typ ; tdesc : tdesc}
 
@@ -255,9 +255,20 @@ let loc_env loc_sup b l =
 
   in local_env Smap.empty {loc=l;desc=Eblock b}
 
-let fc k v1 v2 = Some v1 (*fonction nécessaire comme argument de l'union
-                    sert pour le cas d'égalité, mais inutile car les environnements 
-                    que l'on unit sont par construction disjoints*)
+let fc k v1 v2 = Some v2 (*fonction nécessaire comme argument de l'union
+                    sert pour le cas d'égalité, ne sert que pour la boucle for, dans ce cas
+                    on s'assure que c'est bien le second argument qui est ajouté,
+                    dans les autres cas les environnements sont disjoints par construction*)
+
+let more_specific_type t1 t2 =
+  t1<>Tany && (compatible t1 t2)
+
+let stricty_more_specific_type t1 t2=
+  t1<>Tany && t2=Tany
+
+let strictly_more_specific_function f g=
+  (List.exists2 (fun (_,tf) -> fun (_,tg) -> stricty_more_specific_type tf tg) f.tfarg g.tfarg) &&
+      (List.for_all2 (fun (_,tf) -> fun (_,tg) -> more_specific_type tf tg) f.tfarg g.tfarg)
 
 let rec type_expr t_return env e = (*renvoie la nouvelle expression avec son type dans le nouvel ast*)
   (*t_return est le type avec lequel les return doivent être compatibles, Any si on n'est pas dans une déclaration de fonction*)
@@ -317,13 +328,8 @@ let rec type_expr t_return env e = (*renvoie la nouvelle expression avec son typ
                                           with Not_found-> try Smap.find x varsglob
                                         with Not_found -> error(e1.loc,"Unbound value "^x))
 
-                            in match tx.t with
-                            |Tany -> tx.t <- te.ttype; (*si c'est un Any, on prend en compte l'affectation*)
-                                    let xp={ttype=te.ttype; tdesc=TEvar x}
+                            in assert_compatible tx.t te.ttype e2.loc ;
 
-                                    in {ttype=te.ttype; tdesc=TEaffect(xp,te)}
-
-                            |_ -> assert_compatible tx.t te.ttype e2.loc ;
                             let xp={ttype=tx.t; tdesc=TEvar x} in 
                             {ttype=te.ttype; tdesc=TEaffect(xp,te)} )
 
@@ -429,21 +435,32 @@ let rec type_expr t_return env e = (*renvoie la nouvelle expression avec son typ
                         let l = List.map (type_expr t_return env) pl in
                         (* texpr list *)
 
-                        let fcompatible aux f = (* teste si le type de f est compatible
+                        let fcompatible (i,indexes,res_types) f = (* teste si le type de f est compatible
                                                    avec celui de la fonction appelée *)
                             if (try List.fold_left2
                                     (fun b x (_,y) -> b && (compatible x.ttype y))
                                     true l f.tfarg
                                 with Invalid_argument _ -> false
-                            ) then f::aux else aux
+                            ) then (i+1,i::indexes,f.tfres::res_types) else i+1,indexes,res_types
                         in
 
-                        let pot_f = List.fold_left fcompatible [] fs in
+                        let pot_f = List.fold_left fcompatible (0,[],[]) fs in
 
                         match pot_f with
-                            | [] -> error (e.loc,"No function matches the call type")
-                            | [g] -> {ttype=g.tfres; tdesc=TEcalls(name,l)}
-                            | _ -> error(e.loc,"Ambiguous call to "^name)
+                            | _,[],[] -> error (e.loc,"No function matches the call type")
+                            | _,[i],[t] -> {ttype=t; tdesc=TEcallf(name,[i],l)}
+                            | _,indexes,res_types -> (*plusieurs fonctions correspondent aux types donnés en entrées*)
+                                  begin 
+                                  if List.for_all (fun exp -> exp.ttype<> Tany) l then 
+                                    error(e.loc,"Ambiguous call to "^name);
+                                  (*tous les arguments de f sont de type bien déterminé, ou f n'a pas d'arguments,
+                                  on ne pourra pas faire plus précis à l'exécution, donc on échoue*)
+                                  let t=List.hd res_types in 
+                                  if List.for_all (fun s -> s=t) (List.tl res_types) then 
+                                    {ttype=t;tdesc= TEcallf(name,indexes,l)}
+                                  (*tous les types de retour des fonctions compatibles sont identiques*)
+                                  else {ttype=Tany; tdesc=TEcallf (name,indexes,l)} end
+                                  (*différents types de retour possibles, on renvoie Any*)
 
                         with Not_found -> error (e.loc,"Unbound function "^name)
                   )
@@ -471,6 +488,7 @@ and check_func (vars,funs,structs,fields_of_structs) f =
 
     let env_par=add_params Smap.empty f.tfarg in (* on commence par ajouter les
                                                     paramètres à l'environnement *)
+
     let envf = loc_env env_par f.tfinstr f.tfloc in (* variables locales de f *)
 
     let t,bp = type_block f.tfres (vars,Smap.union fc envf env_par,funs,structs,fields_of_structs) f.tfinstr in
