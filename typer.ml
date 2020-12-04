@@ -9,10 +9,6 @@ exception Error of Ast.loc*string
 let error (loc,s)= 
   raise (Error (loc,s))
 
-
-
-(*variable non définie*)
-
 (*fichier qui type
 
 fonction typing f : prend en argument l'objet de type Ast.file du parseur*)
@@ -23,18 +19,16 @@ module Sset=Set.Make(String)
 
 type tfun={tfarg : (string*typ) list ; tfres : typ; tfinstr : bloc; tfloc : loc}
 
-
-
 type tstruct={tsmut : bool; tsfields : (string*typ) list }
 
 let type_of_string s=
   match s with
-   "Int64" -> Tint64
-  |"Any" -> Tany
-  |"Nothing" -> Tnothing
-  |"Bool" -> Tbool
-  |"String" -> Tstring
-  |_ -> Tstruct s
+  | "Int64" -> Tint64
+  | "Any" -> Tany
+  | "Nothing" -> Tnothing
+  | "Bool" -> Tbool
+  | "String" -> Tstring
+  | _ -> Tstruct s
 
 let string_of_type t =
   match t with
@@ -86,7 +80,7 @@ let first_search_fun f funs structs=
   if Smap.mem (f.fname) structs then error (f.floc,f.fname^" is already a structure. It cannot denote a function.");
 
   let well_formed t loc= (* vérifie qu'un type t dans une déclaration de fonction est
-                            bien formé sachant que les structures déjà déclarées sont
+                            bien formé sachant que les structures sont déjà déclarées
                             ne fait rien si oui, lève une erreur sinon*)
     match t with 
       | Tstruct u when Smap.mem u structs ->()
@@ -106,9 +100,8 @@ let first_search_fun f funs structs=
 
   in let l=expl_param (Sset.empty) (f.fpar)
 
-
-                (*on vérifie que tous les types des arguments de f sont bien formés et on renvoie la liste
-                de leurs types le cas échéants*)
+  (* on vérifie que tous les types des arguments de f sont bien formés et on renvoie la
+     liste de leurs types le cas échéant *)
 
   in well_formed f.ftype (f.floc); (*même vérification pour le type de retour*)
   
@@ -129,8 +122,10 @@ let first_search_fun f funs structs=
 
 let first_search_struct s funs structs fields_of_structs= 
 
-  (*appliqué à une structure s, sachant que les structures précédentes sont structs et les champs fields_of_struct
-  vérifie que les champs de s sont bien formés et renvoie les nouveaux structs et fields_of_structs*)
+  (* appliqué à une structure s, sachant que les structures précédentes sont structs et
+   * les champs fields_of_struct
+   * vérifie que les champs de s sont bien formés et renvoie les nouveaux structs et
+   * fields_of_structs *)
   if Smap.mem (s.sname) structs then error (s.sloc,"multiple structures with name "^(s.sname));
 
   if Smap.mem (s.sname) funs then error (s.sloc,s.sname^" is already a function. It cannot be a structure.");
@@ -164,6 +159,7 @@ let first_search_struct s funs structs fields_of_structs=
 
  in Smap.add (s.sname) {tsmut=s.smut; tsfields= sargs} structs,fields
 
+(* Reliquat de quand on pensait qu'on devait faire une inférence de type minimale *)
 
 (*let const_type e vars=
     match e.desc with
@@ -175,13 +171,15 @@ let first_search_struct s funs structs fields_of_structs=
 
   | _ -> Tany*)
 
-
 let rec first_search_expr vars e=
     match e.desc with 
     | Eaffect (e1,e2) -> let loc_p=first_search_expr vars e2 in 
       
                         begin match e1.desc with 
                         | Evar x when not(Smap.mem x loc_p)-> Smap.add x {t=Tany} loc_p
+                        
+(* à enlever ? *)
+
                         (*| Evar x -> (let t =Smap.find x vars in 
                                     match t,const_type e2 vars with 
                                     | Tany,t2 -> Smap.add x (t2) vars 
@@ -213,15 +211,15 @@ let first_search ast= (*construit l'environnement constitué des structures,
         | Struct s -> let c =first_search_struct s funs structs fields_of_structs in 
                       vars, funs, fst c, snd c
 
-        | Expr e -> first_search_expr vars e,funs,structs,fields_of_structs (*pour que ça compile, c'est faux bien sûr*)
-
+        | Expr e -> first_search_expr vars e,funs,structs,fields_of_structs
     in 
     List.fold_left search_decl (vars,funs,structs,fields_of_structs) ast
 
 let compatible t t' =
     t=Tany || t'=Tany || t=t'
 
-let assert_compatible t t_c t_c_loc= (*type qu'on veut, type que l'on a, localisation de l'expression*)
+let assert_compatible t t_c t_c_loc =
+    (*type qu'on veut, type que l'on a, localisation de l'expression*)
 
   (*lève une erreur si lexpression de type t_c situé à la localisation t_c_loc n'est pas compatible avec le type t*)
   if not(compatible t t_c) then terror(t_c_loc,t_c,t)
@@ -256,9 +254,9 @@ let loc_env loc_sup b l =
   in local_env Smap.empty {loc=l;desc=Eblock b}
 
 let fc k v1 v2 = Some v2 (*fonction nécessaire comme argument de l'union
-                    sert pour le cas d'égalité, ne sert que pour la boucle for, dans ce cas
-                    on s'assure que c'est bien le second argument qui est ajouté,
-                    dans les autres cas les environnements sont disjoints par construction*)
+               sert pour le cas d'égalité, ne sert que pour la boucle for, dans ce cas
+               on s'assure que c'est bien le second argument qui est ajouté,
+               dans les autres cas les environnements sont disjoints par construction*)
 
 let more_specific_type t1 t2 =
   t1<>Tany && (compatible t1 t2)
@@ -270,8 +268,10 @@ let strictly_more_specific_function f g=
   (List.exists2 (fun (_,tf) -> fun (_,tg) -> stricty_more_specific_type tf tg) f.tfarg g.tfarg) &&
       (List.for_all2 (fun (_,tf) -> fun (_,tg) -> more_specific_type tf tg) f.tfarg g.tfarg)
 
-let rec type_expr t_return env e = (*renvoie la nouvelle expression avec son type dans le nouvel ast*)
-  (*t_return est le type avec lequel les return doivent être compatibles, Any si on n'est pas dans une déclaration de fonction*)
+let rec type_expr t_return env e =
+  (* renvoie la nouvelle expression avec son type dans le nouvel ast *)
+  (* t_return est le type avec lequel les return doivent être compatibles, Any si on
+   * n'est pas dans une déclaration de fonction *)
   let varsglob,varsloc,funs,structs,fields=env in (*vars loc est l'environnement des variables locales supérieures*)
   match e.desc with 
   | Eint n -> {ttype= Tint64; tdesc= TEint n}
@@ -307,7 +307,8 @@ let rec type_expr t_return env e = (*renvoie la nouvelle expression avec son typ
 
   | Ebinop (Eq(op),e1,e2) -> let t1=type_expr t_return env e1 in 
                             
-                            let t2=type_expr t_return env e2 in (*aucune contrainte sur la relation entre deux types pour 
+                            let t2=type_expr t_return env e2 in
+                            (*aucune contrainte sur la relation entre deux types pour 
                               une comparaison*)
                             
                           {ttype=Tbool; tdesc= TEbinop(Eq(op),t1,t2)}
@@ -416,8 +417,10 @@ let rec type_expr t_return env e = (*renvoie la nouvelle expression avec son typ
                         {ttype=Tnothing; tdesc= TEfor(x,t1,t2,bp)}
   | Ecall(name,pl)-> try let s=Smap.find name structs in 
                       
-                          let rec expl_param arg par=(*renvoie la liste des types des arguments ar en vérifiant 
-                                  qu'ils sont compatibles avec les types attendus par et qu'il y en a le bon nombre*)
+                          let rec expl_param arg par=
+                         (* renvoie la liste des types des arguments ar en vérifiant 
+                          qu'ils sont compatibles avec les types attendus par et qu'il 
+                          y en a le bon nombre *)
                             match arg,par with 
                             |[],[] ->[]
                             |[],_ -> error (e.loc,name^" expects more arguments")
@@ -435,13 +438,15 @@ let rec type_expr t_return env e = (*renvoie la nouvelle expression avec son typ
                         let l = List.map (type_expr t_return env) pl in
                         (* texpr list *)
 
-                        let fcompatible (i,indexes,res_types) f = (* teste si le type de f est compatible
-                                                   avec celui de la fonction appelée *)
+                        let fcompatible (i,indexes,res_types) f =
+                        (* teste si le type de f est compatible avec celui de la 
+                         * fonction appelée *)
                             if (try List.fold_left2
                                     (fun b x (_,y) -> b && (compatible x.ttype y))
                                     true l f.tfarg
                                 with Invalid_argument _ -> false
-                            ) then (i+1,i::indexes,f.tfres::res_types) else i+1,indexes,res_types
+                            ) then (i+1,i::indexes,f.tfres::res_types)
+                              else i+1,indexes,res_types
                         in
 
                         let pot_f = List.fold_left fcompatible (0,[],[]) fs in
@@ -476,10 +481,9 @@ and type_block t_return env b =(*renvoie le couple type du bloc, listes des expr
                 let e1=type_expr t_return env e and t,q1=type_block t_return env q in 
                 t,e1::q1
 
-
-and check_returns t b = () (* vérifie que les return d'un bloc sont bien de type t *)
-
-and check_func (vars,funs,structs,fields_of_structs) f = 
+and check_func (vars,funs,structs,fields_of_structs) f =
+    (* Construit l'environnement local d'une fonction et vérifie que son corps
+     * est bien typé *)
     
     let rec add_params vars = function
         | [] -> vars
@@ -498,18 +502,10 @@ and check_func (vars,funs,structs,fields_of_structs) f =
     let tres = f.tfres in
     assert_compatible tres bl.ttype f.tfloc;
 
-    (* à remplacer par Type_error (loc,given,expected) une fois qu'on aura un
-     * string_of_type *)
-
     {tfargr= f.tfarg; tfresr= f.tfres; tfinstrr= bl}
 
-(*and check_expr env e = 
-  let t=type_expr env e in 
-  if not (compatible t Tany) then failwith "et voilà Ocaml, argument utilisé, t'es content ?"
-  else ()*)
-
 let second_search ast env = (*On type le corps des fonctions et des expressions et on
-                               vérifie qu'ils conviennent avec l'environnement global *)
+                              vérifie qu'ils conviennent avec l'environnement global *)
     let vars,funs,structs,fields=env in 
 
     let check_decl env d = match d with
@@ -524,4 +520,3 @@ let typing f=
   let env=first_search f in 
   
   second_search f env
-  (*Printf.printf "done\n";;*)

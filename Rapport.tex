@@ -48,4 +48,22 @@ Les éléments des blocs (listes d'expressions) et des listes de paramètres peu
 Les précédences et associativités sont celles indiquées dans le sujet. Un conflit lié au return a été résolu en déclarant les lexèmes centraux des expressions comme de précédence plus grande que celle du return. Les conflits liés à la succession d'une expression et d'un bloc sans séparateur dans les if, while et for ont été résolu en séparant la production (mot-clé expression) de la production ((mot-clé expression) instructions fin) et en associant une précédence plus grande à la première.
 
 \section{Typage}
+
+Le typage se fait en deux étapes, comme suggéré dans le sujet.
+
+La première produit un environnement primaire dans lequel on vérifie que les
+déclarations de types sont valides ( types bien formés, pas de doublon dans les
+arguments d'une fonction, dans les déclarations de fonctions ou de structures ). On
+initialise également les variables globales à ce moment. On garde en mémoire plusieurs dictionnaires contenant les noms et types déclarés des variables globales, tous les
+types de fonctions associées à un même identifiant, les structures et leurs champs, et
+réciproquement la structure associée à un champ pour pouvoir typer les accès à ce
+champ.
+
+Dans un deuxième temps, on construit les environnements locaux associés à chaque
+fonction puis seulement après on type le corps desdites fonctions (Julia étant fait de
+telle sorte qu'une déclaration en fin de fonction peut influencer sur un comportement
+en début de fonction, ce que nous avons mis un certain temps à bien comprendre).
+Enfin, on peut vérifier que toutes les expressions du programme sont bien typées dans
+l'environnement global et l'environnement local dans lequel elles sont plongées le cas
+échéant.
 \end{document}
