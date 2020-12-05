@@ -49,6 +49,7 @@ let () =
 
     if !pretty_print then Printer.print_file ast;
 
+
     if !parse_only then exit 0;
 
     let _=Typer.typing ast in 

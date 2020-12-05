@@ -5,6 +5,8 @@ let binop_rep = [ Ar(Plus), "+";
                   Ar(Minus), "-";
                   Ar(Times), "*";
                   Ar(Exp), "^";
+                  Ar(Mod), "%";
+                  Ar(Div), "/";
                   Bop(And), "&&";
                   Bop(Or), "||";
                   Eq(Equal), "==";
