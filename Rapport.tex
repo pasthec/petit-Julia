@@ -43,9 +43,9 @@ L'analyse syntaxique a été réalisée avec Menhir.
 
 L'analyseur tient compte du sucre syntaxique proposé. La fonction div est remplacée par l'opérateur binaire $/$, la fonction $println$ par la fonction print à laquelle est ajoutée l'expression $\setminus n$ après les arguments. Les types omis dans les déclarations de paramètres sont bien évalués à $Any$.
 
-Les éléments des blocs (listes d'expressions) et des listes de paramètres peuvent être séparés par n'importe quel nombre de point-virgule, et la grammaire en tient compte.
+Les éléments des blocs (listes d'expressions) et des listes de paramètres peuvent être séparés par n'importe quel nombre de points-virgules, et la grammaire en tient compte.
 
-Les précédences et associativités sont celles indiquées dans le sujet. Un conflit lié au return a été résolu en déclarant les lexèmes centraux des expressions comme de précédence plus grande que celle du return. Les conflits liés à la succession d'une expression et d'un bloc sans séparateur dans les if, while et for ont été résolu en séparant la production (mot-clé expression) de la production ((mot-clé expression) instructions fin) et en associant une précédence plus grande à la première.
+Les précédences et associativités sont celles indiquées dans le sujet. Un conflit lié au return a été résolu en déclarant les lexèmes centraux des expressions comme de précédence plus grande que celle du return. Les conflits liés à la succession d'une expression et d'un bloc sans séparateur dans les if, while et for ont été résolus en séparant la production (mot-clé expression) de la production ((mot-clé expression) instructions fin) et en associant une précédence plus grande à la première.
 
 \section{Typage}
 
@@ -66,4 +66,9 @@ en début de fonction, ce que nous avons mis un certain temps à bien comprendre
 Enfin, on peut vérifier que toutes les expressions du programme sont bien typées dans
 l'environnement global et l'environnement local dans lequel elles sont plongées le cas
 échéant.
+\newline
+
+Le typage reconstruit un arbre de syntaxe abstraite sur le même modèle que le précédent en remplaçant la localisation d'une expression dans le fichier par son type. Les fonctions et les structures sont retenues dans un dictionnaire, on détruit donc les instructions des fonctions dans la nouvelle liste de déclarations. 
+
+Les blocs possèdent également l'information de l'environnement local spécifique dans lequel ils sont éventuellement plongés (s'il s'agit d'instructions d'un for, d'un while ou du corps d'une fonction). A un appel de fonction, on associe la liste des identifiants des fonctions de même nom compatibles avec le nombre d'arguments et leur type. Si aucune fonction n'est compatible, on échoue, et si plusieurs fonctions sont compatibles et que l'on est sûrs de ne pas avoir d'informations plus précises à l'exécution, c'est à dire que tous les types des arguments sont connus précisément et que parmi les fonctions compatibles aucune n'est plus spécifique que les autres, on échoue aussi.
 \end{document}

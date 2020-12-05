@@ -84,12 +84,12 @@ let first_search_fun f funs structs=
                             ne fait rien si oui, lève une erreur sinon*)
     match t with 
       | Tstruct u when Smap.mem u structs ->()
-      | Tstruct u -> error (loc,"unbound type"^u) (*erreur à préciser et localiser*)
+      | Tstruct u -> error (loc,"unbound type"^u) 
       | _ ->() 
 
   in 
   if List.mem (f.fname) ["print";"println";"div"] then error (f.floc,(f.fname )^" is a Julia reserved function.") ;
-                    (*erreur à préciser et localiser, will do*)
+                  
   
   let rec expl_param set p_l=
     match p_l with 
@@ -159,17 +159,7 @@ let first_search_struct s funs structs fields_of_structs=
 
  in Smap.add (s.sname) {tsmut=s.smut; tsfields= sargs} structs,fields
 
-(* Reliquat de quand on pensait qu'on devait faire une inférence de type minimale *)
 
-(*let const_type e vars=
-    match e.desc with
-  | Eint _ -> Tint64
-  | Estring _ -> Tstring 
-  | Ebool _ -> Tbool
-  | Evar x -> begin try Smap.find x vars 
-              with Not_found ->error(e.loc,"unbound variable "^x) end 
-
-  | _ -> Tany*)
 
 let rec first_search_expr vars e=
     match e.desc with 
@@ -178,14 +168,6 @@ let rec first_search_expr vars e=
                         begin match e1.desc with 
                         | Evar x when not(Smap.mem x loc_p)-> Smap.add x {t=Tany} loc_p
                         
-(* à enlever ? *)
-
-                        (*| Evar x -> (let t =Smap.find x vars in 
-                                    match t,const_type e2 vars with 
-                                    | Tany,t2 -> Smap.add x (t2) vars 
-                                    | _, Tany -> vars 
-                                    | _,t2 when t=t2 -> vars 
-                                    | _,t2 -> raise (Type_error(e2.loc,string_of_type t2,string_of_type t)))*)
                         | _ -> loc_p end 
     | Eblock b-> List.fold_left first_search_expr vars b 
     | IfElse (e1,b1,b2) -> let v1= first_search_expr vars e1 in 
@@ -259,7 +241,7 @@ let fc k v1 v2 = Some v2 (*fonction nécessaire comme argument de l'union
                dans les autres cas les environnements sont disjoints par construction*)
 
 let more_specific_type t1 t2 =
-  t1<>Tany && (compatible t1 t2)
+  t2=Tany || t1=t2
 
 let stricty_more_specific_type t1 t2=
   t1<>Tany && t2=Tany
@@ -267,6 +249,19 @@ let stricty_more_specific_type t1 t2=
 let strictly_more_specific_function f g=
   (List.exists2 (fun (_,tf) -> fun (_,tg) -> stricty_more_specific_type tf tg) f.tfarg g.tfarg) &&
       (List.for_all2 (fun (_,tf) -> fun (_,tg) -> more_specific_type tf tg) f.tfarg g.tfarg)
+
+let rec del a l= (*supprime l'unique élément a de l*)
+  match l with 
+  | [] ->[]
+  | b::q when a=b -> q
+  | b::q -> b::(del a q)
+
+let is_more_specific l f=
+  List.for_all (strictly_more_specific_function f) (del f l) (*teste si f est strictement plus spécifique que tous 
+                                                            les autres éléments de l*)
+
+let exists_more_specific_function fs =
+  List.exists (is_more_specific fs) fs
 
 let rec type_expr t_return env e =
   (* renvoie la nouvelle expression avec son type dans le nouvel ast *)
@@ -339,7 +334,8 @@ let rec type_expr t_return env e =
 
                                     let s,tx=(try Smap.find x fields 
                                               with Not_found -> error (e1.loc,"No such field "^x))
-                                      (*on cherche quel est la structure qui a pour champ x et le type associé, on échoue si elle n'existe pas*)
+                                      (*on cherche quel est la structure qui a pour champ x et le type associé, 
+                                      on échoue si elle n'existe pas*)
                         
                                     in assert_compatible (Tstruct s) te3.ttype e3.loc;
                                     (*on vérifie que e3 est bien de type compatible avec cette structure*)
@@ -358,7 +354,7 @@ let rec type_expr t_return env e =
                       with Not_found -> error(e.loc,"Unbound value "^x))
                       
                     in {ttype=tx.t; tdesc= TEvar x} (*pas redondant avec les cas précédents, car au-dessus on doit 
-                                faire l'affectation et la modification de l'environnement*)
+                                vérifier la compatibilité de l'affectation*)
 
   | Earg(e1,x) -> let s,tx=(try Smap.find x fields 
                   with Not_found -> error (e1.loc,"No such field "^x))
@@ -415,7 +411,7 @@ let rec type_expr t_return env e =
                         let bp={ttype=t; tdesc= TEblock (l,envloc)} in 
 
                         {ttype=Tnothing; tdesc= TEfor(x,t1,t2,bp)}
-  | Ecall(name,pl)-> try let s=Smap.find name structs in 
+  | Ecall(name,pl)-> try let s=Smap.find name structs in (*on tente un appel de structure*)
                       
                           let rec expl_param arg par=
                          (* renvoie la liste des types des arguments ar en vérifiant 
@@ -432,36 +428,43 @@ let rec type_expr t_return env e =
                     in let l=expl_param pl s.tsfields in 
                     {ttype=Tstruct name; tdesc=TEcalls (name,l)}
 
-                  with Not_found -> (
+                  with Not_found -> ((*appel de fonction*)
                         try let fs = Smap.find name funs in
 
                         let l = List.map (type_expr t_return env) pl in
                         (* texpr list *)
 
-                        let fcompatible (i,indexes,res_types) f =
+                        let fcompatible (i,indexes,comp_funs) f =
                         (* teste si le type de f est compatible avec celui de la 
-                         * fonction appelée *)
+                         * fonction appelée 
+                         renvoie les indices des fonctions compatibles et les fonctions elles-mêmes pour le test
+                         d'ambiguité*)
                             if (try List.fold_left2
                                     (fun b x (_,y) -> b && (compatible x.ttype y))
                                     true l f.tfarg
                                 with Invalid_argument _ -> false
-                            ) then (i+1,i::indexes,f.tfres::res_types)
-                              else i+1,indexes,res_types
+                            ) then (i+1,i::indexes,f::comp_funs)
+                              else i+1,indexes,comp_funs
                         in
 
                         let pot_f = List.fold_left fcompatible (0,[],[]) fs in
 
                         match pot_f with
                             | _,[],[] -> error (e.loc,"No function matches the call type")
-                            | _,[i],[t] -> {ttype=t; tdesc=TEcallf(name,[i],l)}
-                            | _,indexes,res_types -> (*plusieurs fonctions correspondent aux types donnés en entrées*)
+                            | _,[i],[f] -> {ttype=f.tfres; tdesc=TEcallf(name,[i],l)}
+                            | _,indexes,comp_funs -> (*plusieurs fonctions correspondent aux types donnés en entrées*)
                                   begin 
-                                  if List.for_all (fun exp -> exp.ttype<> Tany) l then 
+                                  if List.for_all (fun exp -> exp.ttype<> Tany) l &&
+                                     not(exists_more_specific_function fs) (*aucune fonction n'est plus spécifique que
+                                                      les autres*)
+                                    then 
                                     error(e.loc,"Ambiguous call to "^name);
+
                                   (*tous les arguments de f sont de type bien déterminé, ou f n'a pas d'arguments,
                                   on ne pourra pas faire plus précis à l'exécution, donc on échoue*)
-                                  let t=List.hd res_types in 
-                                  if List.for_all (fun s -> s=t) (List.tl res_types) then 
+
+                                  let t=(List.hd comp_funs).tfres in 
+                                  if List.for_all (fun f -> f.tfres=t) (List.tl comp_funs) then 
                                     {ttype=t;tdesc= TEcallf(name,indexes,l)}
                                   (*tous les types de retour des fonctions compatibles sont identiques*)
                                   else {ttype=Tany; tdesc=TEcallf (name,indexes,l)} end
@@ -470,8 +473,6 @@ let rec type_expr t_return env e =
                         with Not_found -> error (e.loc,"Unbound function "^name)
                   )
 
-  | _ -> {ttype=Tnothing;tdesc=TEbool true } (* provoquera une erreur de compatibilité
-  pour nous indiquer que quelque chose n'est pas encore implémenté *)
 
 and type_block t_return env b =(*renvoie le couple type du bloc, listes des expressions dans le nouvel ast*)
       match b with

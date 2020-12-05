@@ -46,9 +46,10 @@ let () =
   try
     let ast = Parser.file Lexer.token lb in
     close_in c;
-    if !parse_only then exit 0;
-    
+
     if !pretty_print then Printer.print_file ast;
+
+    if !parse_only then exit 0;
 
     let f=Typer.typing ast in 
     if !type_only then exit 0
@@ -72,5 +73,5 @@ let () =
   eprintf "Error: %s@." s;
   exit 1
     | e ->
-	eprintf "Anomaly: %s\n@." (Printexc.to_string e); (*erreur inattendue du compilateur, inch'allah ça sert à rien*)
+	eprintf "Anomaly: %s\n@." (Printexc.to_string e); (*erreur inattendue du compilateur*)
 	exit 2
