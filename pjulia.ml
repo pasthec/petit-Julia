@@ -51,7 +51,7 @@ let () =
 
     if !parse_only then exit 0;
 
-    let f=Typer.typing ast in 
+    let _=Typer.typing ast in 
     if !type_only then exit 0
 
     (*puis production de code*)

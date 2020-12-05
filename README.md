@@ -1,7 +1,7 @@
 # petit Julia
 Projet du cours langages de programmation et compilation année 2020-2021.
 
-La compilation se fait en exécutant `make` dans le dossier principal, qui fait appel à `dune` ( penser à faire `eval $(opam env)` si il y a des erreurs liées à `opam` ) puis déplace l'exécutable `pjuliac` dans le dossier principal et le rend exécutable ( exécuter avec `sudo` si les permissions sont refusées ).
+La compilation se fait en exécutant `make` dans le dossier principal, qui fait appel à `dune` ( penser à faire `eval $(opam env)` si il y a des erreurs liées à `opam` ) puis déplace l'exécutable `pjuliac` dans le dossier principal et le rend exécutable.
 
 La commande `make clean` permet d'enlever tous les fichiers créés par la compilation.
 
