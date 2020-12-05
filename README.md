@@ -14,4 +14,4 @@ Le programme s'utilise en faisant `./pjuliac` suivi éventuellement des argument
   --help  Display this list of options
 ```
 
-Le pretty printer permet d'afficher une représentation de l'ast obtenu après le parsing sous la forme d'un code êtit-julia ( avec quelques différences comme les accolades pour les `if...else` pour délimiter leur portée ) pour pouvoir débugger ou éventuellement désoffusquer un code.
+Le pretty printer permet d'afficher une représentation de l'ast obtenu après le parsing sous la forme d'un code petit-julia ( avec quelques différences comme les accolades pour les `if...else` pour délimiter leur portée ) pour pouvoir débugger ou éventuellement désoffusquer un code.
