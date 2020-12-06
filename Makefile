@@ -5,3 +5,4 @@ pjuliac: ast.ml dune dune-project lexer.mll parser.mly pjulia.ml printer.ml type
 
 clean:
 	rm -rf _build
+	rm pjuliac
