@@ -12,11 +12,16 @@ let type_only = ref false
 
 let pretty_print = ref false
 
+let ofile = ref ""
+
+let set_file f s = f := s
+
 let spec =
   [
     "--parse-only", Arg.Set parse_only, "  stop after parsing";
     "--type-only", Arg.Set type_only, " stop after typing";
-    "--pretty-print", Arg.Set pretty_print, " print the ast produced after parsing"]
+    "--pretty-print", Arg.Set pretty_print, " print the ast produced after parsing";
+    "-o", Arg.String (set_file ofile), "<file> to specify the output file"]
 
 let file = (*chaîne de caractère avec le nom du fichier passé en argument, vérifie qu'on a bien un .jl*)
   (* (ou éventuellement pour le moment stdin) *)
@@ -52,10 +57,18 @@ let () =
 
     if !parse_only then exit 0;
 
-    let _=Typer.typing ast in 
-    if !type_only then exit 0
+    let ast = Typer.typing ast in 
+    if !type_only then exit 0;
 
     (*puis production de code*)
+
+    if !ofile="" then (
+        if file="stdin" then ofile:="out.s"
+        else ofile := Filename.chop_suffix file ".jl" ^ ".s"
+    );
+
+    Compile.compile ast !ofile
+
   with
     | Lexer.Lexing_error s -> (*erreur lexicale*)
 	report (lexeme_start_p lb, lexeme_end_p lb);

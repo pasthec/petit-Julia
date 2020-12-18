@@ -515,7 +515,7 @@ let second_search ast env = (*On type le corps des fonctions et des expressions 
         | Struct s -> Ts s
 
    in let l=List.map (check_decl env) ast
-  in l,Smap.map (fun l -> List.map (check_func env) l) funs,structs
+  in l,Smap.map (fun l -> List.map (check_func env) l) funs,structs,vars
 
 let typing f=
   let env=first_search f in 
