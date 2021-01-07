@@ -7,6 +7,11 @@ let compile_binop op =
     (*code assembleur de l'opération binaire e1 op e2 où la valeur de 1 est dans rax et celle de e2 dans rbx*)
     match op with 
     | Ar(Plus) -> addq !%rbx !%rax 
+    | Ar(Minus) -> subq !%rbx !%rax
+    | Ar(Times) -> imulq !%rbx !%rax
+    | Ar(Div) -> cqto ++ idivq !%rbx
+    | Ar(Mod) -> cqto ++ idivq !%rbx ++ movq !%rdx !%rax
+    | Ar(Exp) -> call "fast_exp"
     | _ -> failwith "not yet implemented"
 
 
@@ -45,6 +50,25 @@ let compile_instr decl =
     | Tf _ -> nop
     | Ts _ -> nop
     | Te e -> compile_expr e 
+
+let fast_exp =
+    (* fait l'exponentiation rapide de %rax^%rbx si %rbx est positif *)
+    label "fast_exp" ++
+
+    testq !%rbx !%rbx ++
+    js "negative_exp" ++
+        
+    (* exponentiation rapide à coder ici*)
+
+    ret
+
+let negative_exp =
+    label "negative_exp" ++
+    leaq (lab ".negative_exp") rdi ++
+    movq (imm 0) !%rax ++
+    call "printf" ++
+    movq (imm 1) !%rax ++
+    ret
 
 let print_f =
     (*fonction qui affiche la valeur en sommet de pile et la dépile
@@ -124,7 +148,9 @@ let print_data =  (*penser à virer les \n pour ne pas faire doublon avec printl
     label ".bfalse" ++
     string "false\n" ++
     label ".implementation_error" ++
-    string "not yet implemented\n"
+    string "not yet implemented\n"  ++
+    label ".negative_exp" ++
+    string "Exponents should be nonnegative\n"
 
 let compile (decls, funs, structsi,vars) ofile =
     let code = List.map compile_instr decls in
@@ -136,6 +162,8 @@ let compile (decls, funs, structsi,vars) ofile =
             code ++
             movq (imm 0) !%rax ++ (* exit *)
             ret ++
+            fast_exp ++
+            negative_exp ++
             print_f ++
             print_int ++
             print_bool ++
