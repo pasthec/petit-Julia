@@ -3,6 +3,13 @@ open X86_64
 open Format
 open Typer
 
+let compile_binop op =
+    (*code assembleur de l'opération binaire e1 op e2 où la valeur de 1 est dans rax et celle de e2 dans rbx*)
+    match op with 
+    | Ar(Plus) -> addq !%rbx !%rax 
+    | _ -> failwith "not yet implemented"
+
+
 let rec compile_expr e =
     match e.tdesc with 
     | Tprint l -> let lc= List.map (fun e -> (compile_expr e) ++ (call "print") ++ (addq (imm 16) !%rsp)) l in 
@@ -14,8 +21,23 @@ let rec compile_expr e =
                 pushq (imm 2)
 
     (*| TEstring s -> *)
+
+    | TEbinop(op,e1,e2) -> compile_expr e2 ++
+                        compile_expr e1 ++ (*à ce stade, e1 puis e2 sont en sommet de pile*)
+                        addq (imm 8) !%rsp ++ (*on ignore le type de e1, à préciser à l'avenir*)
+                        popq rax ++ (*valeur de e1 dans rax*)
+                        addq (imm 8) !%rsp ++
+                        popq rbx ++
+                        compile_binop op ++ (*à ce stade, la valeur de e1 op e2 est dans rax*)
+                        pushq !%rax ++
+                        (match op with 
+                        | Ar(_) -> pushq (imm 1) (*la valeur est un entier*)
+                        | _ -> pushq (imm 2)) (*la valeur est un booléen*)
+                        
     
-    | _ -> nop 
+    | _ -> pushq (imm 0) ++ (*toutes les expressions non implémentées equivaudront à un double nothing
+                            sur la pile pour le moment (pour que tout soit de taille 2)*)
+        pushq (imm 0)
 
 
 let compile_instr decl = 
@@ -44,6 +66,11 @@ let print_f =
 
     (*cmpq (imm 3) !%rsi ++
     je "print_string"*)
+
+    leaq (lab ".implementation_error") rdi ++
+    movq (imm 0) !%rax ++
+    call "printf" ++
+
 
     (*dans les faits, ici il faudra faire un print pour chaque structure*)
 
@@ -95,7 +122,9 @@ let print_data =  (*penser à virer les \n pour ne pas faire doublon avec printl
     label ".btrue" ++
     string "true\n" ++
     label ".bfalse" ++
-    string "false\n" 
+    string "false\n" ++
+    label ".implementation_error" ++
+    string "not yet implemented\n"
 
 let compile (decls, funs, structsi,vars) ofile =
     let code = List.map compile_instr decls in
