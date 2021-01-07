@@ -12,6 +12,8 @@ let compile_binop op =
     | Ar(Div) -> cqto ++ idivq !%rbx
     | Ar(Mod) -> cqto ++ idivq !%rbx ++ movq !%rdx !%rax
     | Ar(Exp) -> call "fast_exp"
+    | Bop(And) -> andq !%rbx !%rax 
+    | Bop(Or) -> orq !%rbx !%rax 
     | _ -> failwith "not yet implemented"
 
 
@@ -38,7 +40,21 @@ let rec compile_expr e =
                         (match op with 
                         | Ar(_) -> pushq (imm 1) (*la valeur est un entier*)
                         | _ -> pushq (imm 2)) (*la valeur est un booléen*)
-                        
+    
+    | TEnot(e1) -> compile_expr e1 ++
+                    addq (imm 8) !%rsp ++
+                    popq rbx ++
+                    movq (imm 1) !%rax ++
+                    subq !%rbx !%rax ++ (*1-e1, le not(1) faisait -2 (bit à bit en complément à 2 ?)*)
+                    pushq !%rax ++
+                    pushq (imm 2)
+
+    | TEminus(e1) -> compile_expr e1 ++
+                    addq (imm 8) !%rsp ++
+                    popq rax ++
+                    negq !%rax ++
+                    pushq !%rax ++
+                    pushq (imm 1)
     
     | _ -> pushq (imm 0) ++ (*toutes les expressions non implémentées equivaudront à un double nothing
                             sur la pile pour le moment (pour que tout soit de taille 2)*)
@@ -151,6 +167,8 @@ let print_data =  (*penser à virer les \n pour ne pas faire doublon avec printl
     string "not yet implemented\n"  ++
     label ".negative_exp" ++
     string "Exponents should be nonnegative\n"
+
+    
 
 let compile (decls, funs, structsi,vars) ofile =
     let code = List.map compile_instr decls in
