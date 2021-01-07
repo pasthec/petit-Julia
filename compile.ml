@@ -4,7 +4,8 @@ open Format
 open Typer
 
 let compile_binop op =
-    (*code assembleur de l'opération binaire e1 op e2 où la valeur de 1 est dans rax et celle de e2 dans rbx*)
+    (*code assembleur de l'opération binaire e1 op e2 où la valeur de 1 est dans rax et celle de e2 dans rbx
+    met le résultat dans rax*)
     match op with 
     | Ar(Plus) -> addq !%rbx !%rax 
     | Ar(Minus) -> subq !%rbx !%rax
@@ -14,7 +15,13 @@ let compile_binop op =
     | Ar(Exp) -> call "fast_exp"
     | Bop(And) -> andq !%rbx !%rax 
     | Bop(Or) -> orq !%rbx !%rax 
-    | _ -> failwith "not yet implemented"
+    | Eq(Equal) -> call "comp_equal"
+    | Eq(Different) -> call "comp_different"
+    | Comp(Infeq) -> call "comp_infeq"
+    | Comp(Inf) -> call "comp_inf"
+    | Comp(Supeq) -> call "comp_supeq"
+    | Comp(Sup) -> call "comp_sup"
+
 
 
 let rec compile_expr e =
@@ -168,7 +175,44 @@ let print_data =  (*penser à virer les \n pour ne pas faire doublon avec printl
     label ".negative_exp" ++
     string "Exponents should be nonnegative\n"
 
-    
+let comparisons = 
+    label "comp_equal" ++ 
+    cmpq !%rbx !%rax ++
+    je "comp_true" ++
+    jmp "comp_false" ++
+
+    label "comp_different" ++ 
+    cmpq !%rbx !%rax ++
+    jne "comp_true" ++
+    jmp "comp_false" ++
+
+    label "comp_infeq" ++ 
+    cmpq !%rbx !%rax ++
+    jle "comp_true" ++
+    jmp "comp_false" ++
+
+    label "comp_inf" ++ 
+    cmpq !%rbx !%rax ++
+    jl "comp_true" ++
+    jmp "comp_false" ++
+
+    label "comp_supeq" ++ 
+    cmpq !%rbx !%rax ++
+    jge "comp_true" ++
+    jmp "comp_false" ++
+
+    label "comp_sup" ++ 
+    cmpq !%rbx !%rax ++
+    jg "comp_true" ++
+    jmp "comp_false" ++
+
+    label "comp_true" ++ 
+    movq (imm 1) !%rax ++
+    ret ++
+
+    label "comp_false" ++
+    movq (imm 0)  !%rax ++
+    ret 
 
 let compile (decls, funs, structsi,vars) ofile =
     let code = List.map compile_instr decls in
@@ -185,6 +229,7 @@ let compile (decls, funs, structsi,vars) ofile =
             print_f ++
             print_int ++
             print_bool ++
+            comparisons ++
             ins ""; (* on saute une ligne pour aérer *)
           data =
               (*Smap.fold (fun x _ l -> label x ++ (dquad [0]) ++ l) vars*) d
