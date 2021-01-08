@@ -4,7 +4,7 @@ open Format
 open Typer
 
 
-module Smap=Map.Make(struct type t=string let compare=compare end)
+module Smap=Typer.Smap (*Map.Make(struct type t=string let compare=compare end) *)
 
 let compile_binop op =
     (*code assembleur de l'opération binaire e1 op e2 où la valeur de 1 est dans rax et celle de e2 dans rbx
@@ -80,6 +80,18 @@ let rec compile_expr string_set e =
                     pushq !%rax ++
                     pushq (imm 1)
     
+    | TEaffect(e1, e2) -> begin match e1.tdesc with
+                          | TEvar(x) -> compile_expr string_set e2 ++
+                                       popq rax ++ popq rbx ++
+                                       movq !%rax (ind ("_t_"^x)) ++
+                                       movq !%rbx (ind ("_v_"^x))
+                          
+                          | _ ->       pushq (imm 0) ++ pushq (imm 0)
+                          end
+                          
+    | TEvar(x) -> movq (ind ("_v_"^x)) !%rax ++ pushq !%rax ++
+                  movq (ind ("_t_"^x)) !%rax ++ pushq !%rax
+
     | _ -> pushq (imm 0) ++ (*toutes les expressions non implémentées equivaudront à un double nothing
                             sur la pile pour le moment (pour que tout soit de taille 2)*)
         pushq (imm 0)
@@ -267,6 +279,8 @@ let compile (decls, funs, structsi,vars) ofile =
     let string_set = set,next in 
     let code = List.map (compile_instr string_set) decls in
     let code = List.fold_right (++) code nop in
+    let variables = Smap.fold (fun x _ acc -> label ("_v_"^x) ++ (dquad [0]) ++
+                    label ("_t_"^x) ++ (dquad [0]) ++ acc) vars nop in
     let d = print_data in 
     let s = print_string_labels ( !set) in 
     let pgm =
@@ -283,7 +297,7 @@ let compile (decls, funs, structsi,vars) ofile =
             comparisons ++
             ins ""; (* on saute une ligne pour aérer *)
           data =
-              (*Smap.fold (fun x _ l -> label x ++ (dquad [0]) ++ l) vars*) d ++ s
+              variables ++ d ++ s
         }
     in
     let f = open_out ofile in

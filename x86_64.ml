@@ -95,9 +95,12 @@ let (!%) = reg
 let imm i = fun fmt () -> fprintf fmt "$%i" i
 let imm32 i = fun fmt () -> fprintf fmt "$%ld" i
 let imm64 i = fun fmt () -> fprintf fmt "$%Ld" i
-let ind ?(ofs=0) ?index ?(scale=1) r = fun fmt () -> match index with
-  | None -> fprintf fmt "%d(%s)" ofs r
-  | Some r1 -> fprintf fmt "%d(%s,%s,%d)" ofs r r1 scale
+let ind ?ofs ?index ?(scale=1) r = fun fmt () -> match ofs,index with
+  | Some ofs,None -> fprintf fmt "%d(%s)" ofs r
+  | Some ofs,Some r1 -> fprintf fmt "%d(%s,%s,%d)" ofs r r1 scale
+  | None,None -> fprintf fmt "(%s)" r
+  | None,Some r1 -> fprintf fmt "(%s,%s,%d)" r r1 scale
+
 let abslab (l: label) = fun fmt () -> fprintf fmt "%a" mangle l
 let rellab (l: label) = fun fmt () -> fprintf fmt "%a(%%rip)" mangle l
 let lab = rellab

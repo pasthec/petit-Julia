@@ -123,7 +123,7 @@ expr:
 
     | s=IDENT_LPAR arg=separated_list(",",expr) ")" {
         match s,arg with
-            |"div",e1::[e2] -> {desc=Ebinop (Ar(Div), e2, e1);loc=($startpos,$endpos)} 
+            |"div",e1::[e2] -> {desc=Ebinop (Ar(Div), e1, e2);loc=($startpos,$endpos)} 
             (*fonction div transformée en l'opérateur de division*)
             |"div", _ -> assert false (*mauvais nombre d'arguments pour div*)
             |"println", _ -> let en= {desc=Estring "\n"; loc=($startpos,$endpos)} in 
