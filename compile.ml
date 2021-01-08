@@ -3,6 +3,9 @@ open X86_64
 open Format
 open Typer
 
+
+module Smap=Map.Make(struct type t=string let compare=compare end)
+
 let compile_binop op =
     (*code assembleur de l'opération binaire e1 op e2 où la valeur de 1 est dans rax et celle de e2 dans rbx
     met le résultat dans rax*)
@@ -24,9 +27,12 @@ let compile_binop op =
 
 
 
-let rec compile_expr e =
+let rec compile_expr string_set e =
+    (*string_set est un couple de références la table de hachage des strings déjà existants 
+    et du prochain identifiant à attribuer*)
     match e.tdesc with 
-    | Tprint l -> let lc= List.map (fun e -> (compile_expr e) ++ (call "print") ++ (addq (imm 16) !%rsp)) l in 
+    | Tprint l -> let lc= 
+                    List.map (fun e -> (compile_expr string_set e) ++ (call "print") ++ (addq (imm 16) !%rsp)) l in 
                     List.fold_left (++) nop lc
     | TEint i -> pushq (imm64 i) ++
                 pushq (imm 1)
@@ -34,10 +40,21 @@ let rec compile_expr e =
                 pushq (imm i) ++
                 pushq (imm 2)
 
-    (*| TEstring s -> *)
+    | TEstring s -> begin 
+                    let set,next= string_set in 
+                    let i= (match Smap.mem s ( !set) with 
+                            | true -> Smap.find s (!set)
+                            | _ -> set :=  Smap.add s ( !next) ( !set);
+                                    incr next;
+                                    ( !next) -1)
+                    
+                    in leaq (lab (".str_"^string_of_int(i))) rax ++
+                    pushq !%rax ++
+                    pushq (imm 3) 
+                    end 
 
-    | TEbinop(op,e1,e2) -> compile_expr e2 ++
-                        compile_expr e1 ++ (*à ce stade, e1 puis e2 sont en sommet de pile*)
+    | TEbinop(op,e1,e2) -> compile_expr string_set e2 ++
+                        compile_expr string_set e1 ++ (*à ce stade, e1 puis e2 sont en sommet de pile*)
                         addq (imm 8) !%rsp ++ (*on ignore le type de e1, à préciser à l'avenir*)
                         popq rax ++ (*valeur de e1 dans rax*)
                         addq (imm 8) !%rsp ++
@@ -48,7 +65,7 @@ let rec compile_expr e =
                         | Ar(_) -> pushq (imm 1) (*la valeur est un entier*)
                         | _ -> pushq (imm 2)) (*la valeur est un booléen*)
     
-    | TEnot(e1) -> compile_expr e1 ++
+    | TEnot(e1) -> compile_expr string_set e1 ++
                     addq (imm 8) !%rsp ++
                     popq rbx ++
                     movq (imm 1) !%rax ++
@@ -56,7 +73,7 @@ let rec compile_expr e =
                     pushq !%rax ++
                     pushq (imm 2)
 
-    | TEminus(e1) -> compile_expr e1 ++
+    | TEminus(e1) -> compile_expr string_set e1 ++
                     addq (imm 8) !%rsp ++
                     popq rax ++
                     negq !%rax ++
@@ -68,11 +85,11 @@ let rec compile_expr e =
         pushq (imm 0)
 
 
-let compile_instr decl = 
+let compile_instr string_set decl = 
     match decl with
     | Tf _ -> nop
     | Ts _ -> nop
-    | Te e -> compile_expr e 
+    | Te e -> compile_expr string_set e 
 
 let fast_exp =
     (* fait l'exponentiation rapide de %rax^%rbx si %rbx est positif *)
@@ -111,8 +128,8 @@ let print_f =
     cmpq (imm 2) !%rsi ++
     je "print_bool" ++
 
-    (*cmpq (imm 3) !%rsi ++
-    je "print_string"*)
+    cmpq (imm 3) !%rsi ++
+    je "print_string" ++
 
     leaq (lab ".implementation_error") rdi ++
     movq (imm 0) !%rax ++
@@ -152,28 +169,37 @@ let print_bool =
 
     jmp "end_print"
 
-(*let print_string =
+let print_string =
     label "print_string" ++
     movq !%rdi !%rsi ++
     leaq (lab ".Sprint_string") rdi ++
     movq (imm 0) !%rax ++
     call "printf" ++
 
-    jmp "end_print"*)
+    jmp "end_print"
 
 let print_data =  (*penser à virer les \n pour ne pas faire doublon avec println quand on aura les strings*)
     label ".Sprint_int" ++
-    string "%d\n" ++
-    (*label ".Sprint_string" ++
-    string "%s" ++*)
+    string "%d" ++
+    label ".Sprint_string" ++
+    string "%s" ++
     label ".btrue" ++
-    string "true\n" ++
+    string "true" ++
     label ".bfalse" ++
-    string "false\n" ++
+    string "false" ++
     label ".implementation_error" ++
     string "not yet implemented\n"  ++
     label ".negative_exp" ++
     string "Exponents should be nonnegative\n"
+
+let print_string_label s i =
+    label (".str_"^string_of_int(i)) ++
+    string s
+
+let print_string_labels string_set =
+    let f s i c=
+        print_string_label s i ++ c 
+    in Smap.fold f string_set nop  
 
 let comparisons = 
     label "comp_equal" ++ 
@@ -215,9 +241,12 @@ let comparisons =
     ret 
 
 let compile (decls, funs, structsi,vars) ofile =
-    let code = List.map compile_instr decls in
+    let set = ref (Smap.empty) and next = ref 0 in 
+    let string_set = set,next in 
+    let code = List.map (compile_instr string_set) decls in
     let code = List.fold_right (++) code nop in
     let d = print_data in 
+    let s = print_string_labels ( !set) in 
     let pgm =
         { text =
             globl "main" ++ label "main" ++
@@ -229,10 +258,11 @@ let compile (decls, funs, structsi,vars) ofile =
             print_f ++
             print_int ++
             print_bool ++
+            print_string ++
             comparisons ++
             ins ""; (* on saute une ligne pour aérer *)
           data =
-              (*Smap.fold (fun x _ l -> label x ++ (dquad [0]) ++ l) vars*) d
+              (*Smap.fold (fun x _ l -> label x ++ (dquad [0]) ++ l) vars*) d ++ s
         }
     in
     let f = open_out ofile in
