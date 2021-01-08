@@ -34,7 +34,7 @@ let rec compile_expr string_set e =
     | Tprint l -> let lc= 
                     List.map (fun e -> (compile_expr string_set e) ++ (call "print") ++ (addq (imm 16) !%rsp)) l in 
                     List.fold_left (++) nop lc
-    | TEint i -> pushq (imm64 i) ++
+    | TEint i -> movq (imm64 i) !%rax ++ pushq !%rax ++
                 pushq (imm 1)
     | TEbool b -> let i=(if b then 1 else 0) in 
                 pushq (imm i) ++
@@ -98,11 +98,33 @@ let fast_exp =
     testq !%rbx !%rbx ++
     js "negative_exp" ++
         
-    (* exponentiation rapide à coder ici*)
+    movq !%rax !%rdi ++
+    call "pos_exp" ++
+    ret ++
 
-    ret
 
-let negative_exp =
+    label "pos_exp" ++
+
+    movq (imm 1) !%rax ++
+    testq !%rbx !%rbx ++ (* si b==0, on renvoie 1 *)
+    jne "exp" ++
+    ret ++
+
+    label "exp" ++
+    pushq !%rbx ++
+    shrq (imm 1) !%rbx ++ (* on appelle récursivement exp(a,b/2) *)
+    call "pos_exp" ++
+    imulq !%rax !%rax ++
+    popq rbx ++
+    andq (imm 1) !%rbx ++ (* si b impair on multiplie par a *)
+    jne "imp_exp" ++
+    ret ++
+
+    label "imp_exp" ++
+    imulq !%rdi !%rax ++
+    ret ++
+    
+
     label "negative_exp" ++
     leaq (lab ".negative_exp") rdi ++
     movq (imm 0) !%rax ++
@@ -180,7 +202,7 @@ let print_string =
 
 let print_data =  (*penser à virer les \n pour ne pas faire doublon avec println quand on aura les strings*)
     label ".Sprint_int" ++
-    string "%d" ++
+    string "%lld" ++
     label ".Sprint_string" ++
     string "%s" ++
     label ".btrue" ++
@@ -254,7 +276,6 @@ let compile (decls, funs, structsi,vars) ofile =
             movq (imm 0) !%rax ++ (* exit *)
             ret ++
             fast_exp ++
-            negative_exp ++
             print_f ++
             print_int ++
             print_bool ++
