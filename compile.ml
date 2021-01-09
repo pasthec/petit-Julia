@@ -33,7 +33,9 @@ let rec compile_expr string_set e =
     match e.tdesc with 
     | Tprint l -> let lc= 
                     List.map (fun e -> (compile_expr string_set e) ++ (call "print") ++ (addq (imm 16) !%rsp)) l in 
-                    List.fold_left (++) nop lc
+                    List.fold_left (++) nop lc ++
+                    pushq (imm 0) ++
+                    pushq (imm 0) (*l'expression print l vaut nothing*)
     | TEint i -> movq (imm64 i) !%rax ++ pushq !%rax ++
                 pushq (imm 1)
     | TEbool b -> let i=(if b then 1 else 0) in 
@@ -84,7 +86,9 @@ let rec compile_expr string_set e =
                           | TEvar(x) -> compile_expr string_set e2 ++
                                        popq rax ++ popq rbx ++
                                        movq !%rax (ind ("_t_"^x)) ++
-                                       movq !%rbx (ind ("_v_"^x))
+                                       movq !%rbx (ind ("_v_"^x)) ++
+                                       pushq !%rbx ++
+                                       pushq !%rax (*l'expression x=a vaut a*)
                           
                           | _ ->       pushq (imm 0) ++ pushq (imm 0)
                           end
@@ -101,7 +105,7 @@ let compile_instr string_set decl =
     match decl with
     | Tf _ -> nop
     | Ts _ -> nop
-    | Te e -> compile_expr string_set e 
+    | Te e -> compile_expr string_set e ++ addq (imm 16) !%rsp (*on dépile la valeur de l'expression*)
 
 let fast_exp =
     (* fait l'exponentiation rapide de %rax^%rbx si %rbx est positif *)
