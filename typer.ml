@@ -408,7 +408,7 @@ let rec type_expr t_return env e =
 
                         let t,l=type_block t_return (varsglob,Smap.union fc varsloc envloc,funs,structs,fields) b in 
 
-                        let bp={ttype=t; tdesc= TEblock (l,envloc)} in 
+                        let bp={ttype=t; tdesc= TEblock (l,Smap.remove x envloc)} in 
 
                         {ttype=Tnothing; tdesc= TEfor(x,t1,t2,bp)}
   | Ecall(name,pl)-> try let s=Smap.find name structs in (*on tente un appel de structure*)

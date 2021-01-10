@@ -6,6 +6,32 @@ open Typer
 
 module Smap=Typer.Smap (*Map.Make(struct type t=string let compare=compare end) *)
 
+let shift_level env =
+    Smap.map (fun (o,l)-> (o,l+1)) env
+
+
+let alloc loc_var o=
+    (*dictionnaire des variables locales, renvoie un ofs par rapport à rbp pour chacune des variables*)
+    let ofs= ref o in 
+    Smap.map (fun t-> ofs:= !ofs -16; (!ofs,0)) loc_var
+
+let pushn n = subq (imm (8*n)) !%rsp 
+
+let popn n = addq (imm (8*n)) !%rsp
+
+let rec alloc_var n =
+    match n with 
+    | 0 -> nop
+    | _ -> pushq (imm 0) ++ pushq (imm 0) ++ (alloc_var (n-1))
+
+
+
+let union_alloc sup_vars loc_vars ofs=
+    (*décale les ofsets de sup_vars de ofs, et ajoute les variables locales spécifiques*)
+
+    let vars_loc= alloc loc_vars ofs in 
+    Smap.union Typer.fc sup_vars vars_loc 
+
 let compile_binop op =
     (*code assembleur de l'opération binaire e1 op e2 où la valeur de 1 est dans rax et celle de e2 dans rbx
     met le résultat dans rax*)
@@ -25,14 +51,30 @@ let compile_binop op =
     | Comp(Supeq) -> call "comp_supeq"
     | Comp(Sup) -> call "comp_sup"
 
+let get_vars =
+    (*level est dans rdx, rbp de ce level est dans rcx, laisse le rbp final dans rdx *)
+    label "get_var" ++
+    cmpq (imm 0) !%rdx ++
+    je "return_var" ++
+    movq (ind rcx) !%rcx ++
+    subq (imm 1) !%rdx ++
+    jmp "get_var" ++
+    label "return_var" ++
+    ret 
 
+let rec concat_depile l= 
+    (*concatène les codes de la liste l en dépilant les valeurs des expressions intermédiaires*)
+    match l with 
+    | [] -> nop 
+    | [a] -> a 
+    | a::q -> a ++ addq (imm 16) !%rsp ++ (concat_depile q)
 
-let rec compile_expr string_set e =
+let rec compile_expr string_set loc_env instr_id e =
     (*string_set est un couple de références la table de hachage des strings déjà existants 
     et du prochain identifiant à attribuer*)
     match e.tdesc with 
     | Tprint l -> let lc= 
-                    List.map (fun e -> (compile_expr string_set e) ++ (call "print") ++ (addq (imm 16) !%rsp)) l in 
+                    List.map (fun e -> (compile_expr string_set loc_env instr_id e) ++ (call "print") ++ (addq (imm 16) !%rsp)) l in 
                     List.fold_left (++) nop lc ++
                     pushq (imm 0) ++
                     pushq (imm 0) (*l'expression print l vaut nothing*)
@@ -55,8 +97,8 @@ let rec compile_expr string_set e =
                     pushq (imm 3) 
                     end 
 
-    | TEbinop(op,e1,e2) -> compile_expr string_set e2 ++
-                        compile_expr string_set e1 ++ (*à ce stade, e1 puis e2 sont en sommet de pile*)
+    | TEbinop(op,e1,e2) -> compile_expr string_set loc_env instr_id e2 ++
+                        compile_expr string_set loc_env instr_id e1 ++ (*à ce stade, e1 puis e2 sont en sommet de pile*)
                         addq (imm 8) !%rsp ++ (*on ignore le type de e1, à préciser à l'avenir*)
                         popq rax ++ (*valeur de e1 dans rax*)
                         addq (imm 8) !%rsp ++
@@ -67,7 +109,7 @@ let rec compile_expr string_set e =
                         | Ar(_) -> pushq (imm 1) (*la valeur est un entier*)
                         | _ -> pushq (imm 2)) (*la valeur est un booléen*)
     
-    | TEnot(e1) -> compile_expr string_set e1 ++
+    | TEnot(e1) -> compile_expr string_set loc_env instr_id e1 ++
                     addq (imm 8) !%rsp ++
                     popq rbx ++
                     movq (imm 1) !%rax ++
@@ -75,7 +117,7 @@ let rec compile_expr string_set e =
                     pushq !%rax ++
                     pushq (imm 2)
 
-    | TEminus(e1) -> compile_expr string_set e1 ++
+    | TEminus(e1) -> compile_expr string_set loc_env instr_id e1 ++
                     addq (imm 8) !%rsp ++
                     popq rax ++
                     negq !%rax ++
@@ -83,29 +125,134 @@ let rec compile_expr string_set e =
                     pushq (imm 1)
     
     | TEaffect(e1, e2) -> begin match e1.tdesc with
-                          | TEvar(x) -> compile_expr string_set e2 ++
-                                       popq rax ++ popq rbx ++
+                          | TEvar(x) -> compile_expr string_set loc_env instr_id e2 ++
+                                        popq rax ++ popq rbx ++
+                                        (try 
+                                        let (o,l) = Smap.find x loc_env in 
+                                        movq (imm l) !%rdx ++
+                                        movq !%rbp !%rcx ++
+                                        call "get_var" ++
+                                        movq !%rax (ind ~ofs:o rcx) ++
+                                        movq !%rbx (ind ~ofs:(o+8) rcx)
+                                        with Not_found -> 
                                        movq !%rax (ind ("_t_"^x)) ++
-                                       movq !%rbx (ind ("_v_"^x)) ++
-                                       pushq !%rbx ++
+                                       movq !%rbx (ind ("_v_"^x)) ) ++
+
+                                       pushq !%rbx ++ 
                                        pushq !%rax (*l'expression x=a vaut a*)
                           
                           | _ ->       pushq (imm 0) ++ pushq (imm 0)
                           end
                           
-    | TEvar(x) -> movq (ind ("_v_"^x)) !%rax ++ pushq !%rax ++
-                  movq (ind ("_t_"^x)) !%rax ++ pushq !%rax
+    | TEvar(x) -> begin try 
+                    let (o,l) = Smap.find x loc_env in 
+                    movq (imm l) !%rdx ++
+                    movq !%rbp !%rcx ++
+                    call "get_var" ++
+                    movq (ind ~ofs:(o+8) rcx) !%rax ++
+                    pushq !%rax ++
+                    movq (ind ~ofs:o rcx) !%rax ++
+                    pushq !%rax 
+                with Not_found -> 
+
+                    movq (ind ("_v_"^x)) !%rax ++ pushq !%rax ++
+                    movq (ind ("_t_"^x)) !%rax ++ pushq !%rax
+                end 
+
+    | TEblock (b,_) -> let l=List.map (compile_expr string_set loc_env instr_id) b in 
+                      concat_depile l 
+
+    | TEwhile(c,e1) -> let i = !instr_id in 
+                    incr instr_id ;
+                    let loc_spec=(
+                         match e1.tdesc with 
+                        | TEblock(_,m) -> m
+                        | _ -> failwith "impossible matching case" )
+                    in
+                    
+                    let sup = shift_level loc_env in
+
+                    let loc =union_alloc sup loc_spec 0 
+                    in 
+                    
+                    pushq !%rbp ++
+                    movq !%rsp !%rbp ++ 
+
+                    alloc_var (Smap.cardinal loc_spec) ++ (*on alloue la place nécessaire pour les variables locales*)
+
+                    label ("instr_"^string_of_int(i)) ++
+                    compile_expr string_set sup instr_id c ++
+                    popq rax ++
+                    popq rbx ++
+                    cmpq (imm 0) !%rbx ++
+                    je ("end_instr_"^string_of_int(i)) ++
+                    compile_expr string_set loc instr_id e1 ++
+                    addq (imm 16) !%rsp ++
+                    jmp ("instr_"^string_of_int(i))++
+                    label ("end_instr_"^string_of_int(i)) ++
+                    movq !%rbp !%rsp ++
+                    popq rbp ++
+                    pushq (imm 0) ++ pushq (imm 0) 
+
+    | TEfor(x,e1,e2,e3) -> let i = !instr_id in 
+                        incr instr_id ; 
+                        let loc_spec=(
+                        match e3.tdesc with 
+                        | TEblock(_,m) -> union_alloc loc_env m (-16)
+                        | _ -> failwith "impossible matching case" )
+                        in 
+                        
+                        let sup = shift_level loc_env in
+
+                        let loc =Smap.add x (-16,0) (union_alloc sup loc_spec (-16)) in 
+                        
+                        pushq !%rbp ++
+                        movq !%rsp !%rbp ++
+
+                        alloc_var (1+(Smap.cardinal loc_spec)) ++ 
+                        (*on alloue la place nécessaire pour les variables locales en initialisant à nothing*)
+
+            
+                        compile_expr string_set sup instr_id e1 ++
+
+                        popq rax ++ popq rbx ++
+
+                        movq !%rbx (ind ~ofs:(-8) rbp) ++
+                        movq !%rax (ind ~ofs:(-16) rbp) ++ (*x prend la valeur e1*)
+
+                        compile_expr string_set sup instr_id e2 ++
+                        (*on compile e2 une fois*)
+                        label ("instr_"^string_of_int(i)) ++
+                        popq rax ++ popq rbx ++
+                        cmpq (ind ~ofs:(-8) rbp) !%rbx ++
+                        (*si x>e2, la boucle se termine*)
+                        js ("end_instr_"^string_of_int(i)) ++
+                        pushq !%rbx ++ pushq !%rax ++
+                        (*on repush la valeur de e2*)
+                        compile_expr string_set loc instr_id e3 ++
+                        addq (imm 16) !%rsp ++
+                        movq (ind ~ofs:(-8) rbp) !%rax ++
+                        addq (imm 1) !%rax ++
+                        movq !%rax (ind ~ofs:(-8) rbp) ++
+                        jmp ("instr_"^string_of_int(i)) ++
+                        label ("end_instr_"^string_of_int(i)) ++
+                        movq !%rbp !%rsp ++ 
+                        popq rbp ++
+                        pushq (imm 0) ++ pushq (imm 0)
+
+
 
     | _ -> pushq (imm 0) ++ (*toutes les expressions non implémentées equivaudront à un double nothing
                             sur la pile pour le moment (pour que tout soit de taille 2)*)
         pushq (imm 0)
 
 
-let compile_instr string_set decl = 
+let compile_instr string_set instr_id decl = 
     match decl with
     | Tf _ -> nop
     | Ts _ -> nop
-    | Te e -> compile_expr string_set e ++ addq (imm 16) !%rsp (*on dépile la valeur de l'expression*)
+    | Te e -> compile_expr string_set Smap.empty instr_id e ++ 
+            addq (imm 16) !%rsp (*on dépile la valeur de l'expression*)
 
 let fast_exp =
     (* fait l'exponentiation rapide de %rax^%rbx si %rbx est positif *)
@@ -281,7 +428,8 @@ let comparisons =
 let compile (decls, funs, structsi,vars) ofile =
     let set = ref (Smap.empty) and next = ref 0 in 
     let string_set = set,next in 
-    let code = List.map (compile_instr string_set) decls in
+    let instr_id = ref 0 in 
+    let code = List.map (compile_instr string_set instr_id) decls in
     let code = List.fold_right (++) code nop in
     let variables = Smap.fold (fun x _ acc -> label ("_v_"^x) ++ (dquad [0]) ++
                     label ("_t_"^x) ++ (dquad [0]) ++ acc) vars nop in
@@ -299,6 +447,7 @@ let compile (decls, funs, structsi,vars) ofile =
             print_bool ++
             print_string ++
             comparisons ++
+            get_vars ++
             ins ""; (* on saute une ligne pour aérer *)
           data =
               variables ++ d ++ s
