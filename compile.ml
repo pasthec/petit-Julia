@@ -240,6 +240,19 @@ let rec compile_expr string_set loc_env instr_id e =
                         popq rbp ++
                         pushq (imm 0) ++ pushq (imm 0)
 
+    | TIfElse(s,a,b) -> let i= !instr_id in
+                        compile_expr string_set loc_env instr_id s ++
+                        popq rbx ++ popq rax ++
+                        cmpq (imm 2) !%rbx ++
+                        jne "expected_bool" ++
+                        testq !%rax !%rax ++
+                        je ("instr_"^string_of_int(i+1)) ++                       
+                        compile_expr string_set loc_env (incr instr_id; instr_id) a ++
+                        jmp ("end_instr_"^string_of_int(i)) ++
+                        label ("instr_"^string_of_int(i+1)) ++
+                        compile_expr string_set loc_env (incr instr_id; instr_id) b ++
+                        jmp ("end_instr_"^string_of_int(i)) ++
+                        label ("end_instr_"^string_of_int(i))
 
 
     | _ -> pushq (imm 0) ++ (*toutes les expressions non implémentées equivaudront à un double nothing
@@ -375,7 +388,9 @@ let print_data =  (*penser à virer les \n pour ne pas faire doublon avec printl
     label ".implementation_error" ++
     string "not yet implemented\n"  ++
     label ".negative_exp" ++
-    string "Exponents should be nonnegative\n"
+    string "Exponents should be nonnegative\n" ++
+    label ".expected_bool" ++
+    string "ERROR: TypeError: non-boolean used in boolean context\n"
 
 let print_string_label s i =
     label (".str_"^string_of_int(i)) ++
@@ -425,6 +440,14 @@ let comparisons =
     movq (imm 0)  !%rax ++
     ret 
 
+let errors =
+    label "expected_bool" ++
+    leaq (lab ".expected_bool") rdi ++
+    movq (imm 0) !%rax ++
+    call "printf" ++
+    movq (imm 1) !%rax ++
+    ret
+
 let compile (decls, funs, structsi,vars) ofile =
     let set = ref (Smap.empty) and next = ref 0 in 
     let string_set = set,next in 
@@ -448,6 +471,7 @@ let compile (decls, funs, structsi,vars) ofile =
             print_string ++
             comparisons ++
             get_vars ++
+            errors ++
             ins ""; (* on saute une ligne pour aérer *)
           data =
               variables ++ d ++ s
