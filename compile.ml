@@ -24,7 +24,8 @@ let rec alloc_var n =
     | 0 -> nop
     | _ -> pushq (imm 0) ++ pushq (imm 0) ++ (alloc_var (n-1))
 
-
+let string_map = ref Smap.empty and string_id = ref 0 
+let instr_id = ref 0 
 
 let union_alloc sup_vars loc_vars ofs=
     (*décale les ofsets de sup_vars de ofs, et ajoute les variables locales spécifiques*)
@@ -69,12 +70,12 @@ let rec concat_depile l=
     | [a] -> a 
     | a::q -> a ++ addq (imm 16) !%rsp ++ (concat_depile q)
 
-let rec compile_expr string_set loc_env instr_id e =
+let rec compile_expr loc_env e =
     (*string_set est un couple de références la table de hachage des strings déjà existants 
     et du prochain identifiant à attribuer*)
     match e.tdesc with 
     | Tprint l -> let lc= 
-                    List.map (fun e -> (compile_expr string_set loc_env instr_id e) ++ (call "print") ++ (addq (imm 16) !%rsp)) l in 
+                    List.map (fun e -> (compile_expr loc_env e) ++ (call "print") ++ (addq (imm 16) !%rsp)) l in 
                     List.fold_left (++) nop lc ++
                     pushq (imm 0) ++
                     pushq (imm 0) (*l'expression print l vaut nothing*)
@@ -85,20 +86,19 @@ let rec compile_expr string_set loc_env instr_id e =
                 pushq (imm 2)
 
     | TEstring s -> begin 
-                    let set,next= string_set in 
-                    let i= (match Smap.mem s ( !set) with 
-                            | true -> Smap.find s (!set)
-                            | _ -> set :=  Smap.add s ( !next) ( !set);
-                                    incr next;
-                                    ( !next) -1)
+                    let i= (match Smap.mem s ( !string_map) with 
+                            | true -> Smap.find s ( !string_map)
+                            | _ -> string_map :=  Smap.add s ( !string_id) ( !string_map);
+                                    incr string_id;
+                                    ( !string_id) -1)
                     
                     in leaq (lab (".str_"^string_of_int(i))) rax ++
                     pushq !%rax ++
                     pushq (imm 3) 
                     end 
 
-    | TEbinop(op,e1,e2) -> compile_expr string_set loc_env instr_id e2 ++
-                        compile_expr string_set loc_env instr_id e1 ++ (*à ce stade, e1 puis e2 sont en sommet de pile*)
+    | TEbinop(op,e1,e2) -> compile_expr loc_env e2 ++
+                        compile_expr loc_env e1 ++ (*à ce stade, e1 puis e2 sont en sommet de pile*)
                         addq (imm 8) !%rsp ++ (*on ignore le type de e1, à préciser à l'avenir*)
                         popq rax ++ (*valeur de e1 dans rax*)
                         addq (imm 8) !%rsp ++
@@ -109,7 +109,7 @@ let rec compile_expr string_set loc_env instr_id e =
                         | Ar(_) -> pushq (imm 1) (*la valeur est un entier*)
                         | _ -> pushq (imm 2)) (*la valeur est un booléen*)
     
-    | TEnot(e1) -> compile_expr string_set loc_env instr_id e1 ++
+    | TEnot(e1) -> compile_expr loc_env e1 ++
                     addq (imm 8) !%rsp ++
                     popq rbx ++
                     movq (imm 1) !%rax ++
@@ -117,7 +117,7 @@ let rec compile_expr string_set loc_env instr_id e =
                     pushq !%rax ++
                     pushq (imm 2)
 
-    | TEminus(e1) -> compile_expr string_set loc_env instr_id e1 ++
+    | TEminus(e1) -> compile_expr loc_env e1 ++
                     addq (imm 8) !%rsp ++
                     popq rax ++
                     negq !%rax ++
@@ -125,7 +125,7 @@ let rec compile_expr string_set loc_env instr_id e =
                     pushq (imm 1)
     
     | TEaffect(e1, e2) -> begin match e1.tdesc with
-                          | TEvar(x) -> compile_expr string_set loc_env instr_id e2 ++
+                          | TEvar(x) -> compile_expr loc_env e2 ++
                                         popq rax ++ popq rbx ++
                                         (try 
                                         let (o,l) = Smap.find x loc_env in 
@@ -159,7 +159,7 @@ let rec compile_expr string_set loc_env instr_id e =
                     movq (ind ("_t_"^x)) !%rax ++ pushq !%rax
                 end 
 
-    | TEblock (b,_) -> let l=List.map (compile_expr string_set loc_env instr_id) b in 
+    | TEblock (b,_) -> let l=List.map (compile_expr loc_env) b in 
                       concat_depile l 
 
     | TEwhile(c,e1) -> let i = !instr_id in 
@@ -181,12 +181,12 @@ let rec compile_expr string_set loc_env instr_id e =
                     alloc_var (Smap.cardinal loc_spec) ++ (*on alloue la place nécessaire pour les variables locales*)
 
                     label ("instr_"^string_of_int(i)) ++
-                    compile_expr string_set sup instr_id c ++
+                    compile_expr sup c ++
                     popq rax ++
                     popq rbx ++
                     cmpq (imm 0) !%rbx ++
                     je ("end_instr_"^string_of_int(i)) ++
-                    compile_expr string_set loc instr_id e1 ++
+                    compile_expr loc e1 ++
                     addq (imm 16) !%rsp ++
                     jmp ("instr_"^string_of_int(i))++
                     label ("end_instr_"^string_of_int(i)) ++
@@ -213,14 +213,14 @@ let rec compile_expr string_set loc_env instr_id e =
                         (*on alloue la place nécessaire pour les variables locales en initialisant à nothing*)
 
             
-                        compile_expr string_set sup instr_id e1 ++
+                        compile_expr sup e1 ++
 
                         popq rax ++ popq rbx ++
 
                         movq !%rbx (ind ~ofs:(-8) rbp) ++
                         movq !%rax (ind ~ofs:(-16) rbp) ++ (*x prend la valeur e1*)
 
-                        compile_expr string_set sup instr_id e2 ++
+                        compile_expr sup e2 ++
                         (*on compile e2 une fois*)
                         label ("instr_"^string_of_int(i)) ++
                         popq rax ++ popq rbx ++
@@ -229,7 +229,7 @@ let rec compile_expr string_set loc_env instr_id e =
                         js ("end_instr_"^string_of_int(i)) ++
                         pushq !%rbx ++ pushq !%rax ++
                         (*on repush la valeur de e2*)
-                        compile_expr string_set loc instr_id e3 ++
+                        compile_expr loc e3 ++
                         addq (imm 16) !%rsp ++
                         movq (ind ~ofs:(-8) rbp) !%rax ++
                         addq (imm 1) !%rax ++
@@ -241,16 +241,18 @@ let rec compile_expr string_set loc_env instr_id e =
                         pushq (imm 0) ++ pushq (imm 0)
 
     | TIfElse(s,a,b) -> let i= !instr_id in
-                        compile_expr string_set loc_env instr_id s ++
+                        incr instr_id;
+                        compile_expr loc_env s ++
                         popq rbx ++ popq rax ++
                         cmpq (imm 2) !%rbx ++
                         jne "expected_bool" ++
                         testq !%rax !%rax ++
-                        je ("instr_"^string_of_int(i+1)) ++                       
-                        compile_expr string_set loc_env (incr instr_id; instr_id) a ++
+                        je ("instr_"^string_of_int(i)) ++   
+                         
+                        compile_expr loc_env a ++
                         jmp ("end_instr_"^string_of_int(i)) ++
-                        label ("instr_"^string_of_int(i+1)) ++
-                        compile_expr string_set loc_env (incr instr_id; instr_id) b ++
+                        label ("instr_"^string_of_int(i)) ++
+                        compile_expr loc_env b ++
                         jmp ("end_instr_"^string_of_int(i)) ++
                         label ("end_instr_"^string_of_int(i))
 
@@ -260,11 +262,11 @@ let rec compile_expr string_set loc_env instr_id e =
         pushq (imm 0)
 
 
-let compile_instr string_set instr_id decl = 
+let compile_instr decl = 
     match decl with
     | Tf _ -> nop
     | Ts _ -> nop
-    | Te e -> compile_expr string_set Smap.empty instr_id e ++ 
+    | Te e -> compile_expr Smap.empty e ++ 
             addq (imm 16) !%rsp (*on dépile la valeur de l'expression*)
 
 let fast_exp =
@@ -449,15 +451,14 @@ let errors =
     ret
 
 let compile (decls, funs, structsi,vars) ofile =
-    let set = ref (Smap.empty) and next = ref 0 in 
-    let string_set = set,next in 
-    let instr_id = ref 0 in 
-    let code = List.map (compile_instr string_set instr_id) decls in
+
+ 
+    let code = List.map compile_instr decls in
     let code = List.fold_right (++) code nop in
     let variables = Smap.fold (fun x _ acc -> label ("_v_"^x) ++ (dquad [0]) ++
                     label ("_t_"^x) ++ (dquad [0]) ++ acc) vars nop in
     let d = print_data in 
-    let s = print_string_labels ( !set) in 
+    let s = print_string_labels ( !string_map) in 
     let pgm =
         { text =
             globl "main" ++ label "main" ++
