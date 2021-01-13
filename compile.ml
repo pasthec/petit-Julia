@@ -18,9 +18,9 @@ let shift_level env =
     Smap.map (fun (o,l)-> (o,l+1)) env
 
 
-let alloc loc_var o=
+let alloc loc_var=
     (*dictionnaire des variables locales, renvoie un ofs par rapport à rbp pour chacune des variables*)
-    let ofs= ref o in 
+    let ofs= ref 0 in 
     Smap.map (fun t-> ofs:= !ofs -16; (!ofs,0)) loc_var
 
 let pushn n = subq (imm (8*n)) !%rsp 
@@ -35,10 +35,10 @@ let rec alloc_var n =
 let string_map = ref Smap.empty and string_id = ref 0 
 let instr_id = ref 0 
 
-let union_alloc sup_vars loc_vars ofs=
+let union_alloc sup_vars loc_vars=
     (*décale les ofsets de sup_vars de ofs, et ajoute les variables locales spécifiques*)
 
-    let vars_loc= alloc loc_vars ofs in 
+    let vars_loc= alloc loc_vars in 
     Smap.union Typer.fc sup_vars vars_loc 
 
 let compile_binop op =
@@ -193,73 +193,77 @@ let rec compile_expr loc_env e =
                     
                     let sup = shift_level loc_env in
 
-                    let loc =union_alloc sup loc_spec 0 
+                    let loc =union_alloc sup loc_spec
                     in 
                     
+
+                  
+
+                    label ("instr_"^string_of_int(i)) ++
+                    
+                    compile_expr loc_env c ++ (*on compile la condition, si elle est fausse on saute en fin de boucle*)
+                    popq rax ++
+                    popq rbx ++
+                    cmpq (imm 0) !%rbx ++
+                    je ("end_instr_"^string_of_int(i)) ++
                     pushq !%rbp ++
                     movq !%rsp !%rbp ++ 
 
                     alloc_var (Smap.cardinal loc_spec) ++
                     (*on alloue la place nécessaire pour les variables locales*)
-
-                    label ("instr_"^string_of_int(i)) ++
-                    compile_expr sup c ++
-                    popq rax ++
-                    popq rbx ++
-                    cmpq (imm 0) !%rbx ++
-                    je ("end_instr_"^string_of_int(i)) ++
                     compile_expr loc e1 ++
-                    addq (imm 16) !%rsp ++
+                     
+                    movq !%rbp !%rsp ++
+                    popq rbp ++ (*on désalloue toutes les variables locales de la boucle*)
                     jmp ("instr_"^string_of_int(i))++
                     label ("end_instr_"^string_of_int(i)) ++
-                    movq !%rbp !%rsp ++
-                    popq rbp ++
+
                     pushq (imm 0) ++ pushq (imm 0) 
 
     | TEfor(x,e1,e2,e3) -> let i = !instr_id in 
                         incr instr_id ; 
                         let loc_spec=(
                         match e3.tdesc with 
-                        | TEblock(_,m) -> union_alloc loc_env m (-16)
+                        | TEblock(_,m) -> union_alloc loc_env m
                         | _ -> failwith "impossible matching case" )
                         in 
                         
                         let sup = shift_level loc_env in
 
-                        let loc =Smap.add x (-16,0) (union_alloc sup loc_spec (-16)) in
+                        let loc =Smap.add x (24,0) (union_alloc sup loc_spec) in
 
-                        pushq !%rbp ++
-                        movq !%rsp !%rbp ++
 
-                        alloc_var (1+(Smap.cardinal loc_spec)) ++ 
                         (*on alloue la place nécessaire pour les variables locales en initialisant à nothing*)
 
             
-                        compile_expr sup e1 ++
-
-                        popq rax ++ popq rbx ++
-
-                        movq !%rbx (ind ~ofs:(-8) rbp) ++
-                        movq !%rax (ind ~ofs:(-16) rbp) ++ (*x prend la valeur e1*)
+                        compile_expr sup e1 ++ (*e1 se trouve à la place de la valeur x*)
 
                         compile_expr sup e2 ++
                         (*on compile e2 une fois*)
                         label ("instr_"^string_of_int(i)) ++
-                        popq rax ++ popq rbx ++
-                        cmpq (ind ~ofs:(-8) rbp) !%rbx ++
+                        pushq !%rbp ++
+                        movq !%rsp !%rbp ++
+
+                        alloc_var (Smap.cardinal loc_spec) ++ 
+                        movq (ind ~ofs:16 rbp) !%rbx ++ (*valeur de e2*)
+                        cmpq (ind ~ofs:32 rbp) !%rbx ++ (*valeur de x*)
                         (*si x>e2, la boucle se termine*)
                         js ("end_instr_"^string_of_int(i)) ++
-                        pushq !%rbx ++ pushq !%rax ++
-                        (*on repush la valeur de e2*)
+
+                        
                         compile_expr loc e3 ++
                         addq (imm 16) !%rsp ++
-                        movq (ind ~ofs:(-8) rbp) !%rax ++
+                        movq (ind ~ofs:32 rbp) !%rax ++
                         addq (imm 1) !%rax ++
-                        movq !%rax (ind ~ofs:(-8) rbp) ++
+                        movq !%rax (ind ~ofs:32 rbp) ++ (*incrémentation de x*)
+
+                        movq !%rbp !%rsp ++
+                        popq rbp ++ (*on désalloue toutes les variables locales de la boucle*)
                         jmp ("instr_"^string_of_int(i)) ++
                         label ("end_instr_"^string_of_int(i)) ++
                         movq !%rbp !%rsp ++ 
                         popq rbp ++
+                        addq (imm 32) !%rsp ++ (*on désalloue la place pour x et e2*)
                         pushq (imm 0) ++ pushq (imm 0)
 
     | TIfElse(s,a,b) -> let i= !instr_id in

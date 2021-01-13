@@ -285,10 +285,12 @@ let rec type_expr t_return env e =
                           {ttype=Tint64; tdesc= TEbinop(Ar(op),t1,t2)}
 
   | Ebinop(Comp(op),e1,e2) ->let t1=type_expr t_return env e1 in 
-                            assert_compatible Tint64 t1.ttype e1.loc;
+                            if not(compatible Tint64 t1.ttype)&&(not (compatible Tbool t1.ttype))
+                              then terror(e1.loc,t1.ttype,Tint64);
 
                             let t2=type_expr t_return env e2 in 
-                            assert_compatible Tint64 t2.ttype e2.loc;
+                            if not(compatible Tint64 t2.ttype)&&(not (compatible Tbool t2.ttype))
+                              then terror(e2.loc,t2.ttype,Tint64);
 
                             {ttype=Tbool; tdesc= TEbinop(Comp(op),t1,t2)}
 
