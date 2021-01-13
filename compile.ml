@@ -6,6 +6,14 @@ open Typer
 
 module Smap=Typer.Smap (*Map.Make(struct type t=string let compare=compare end) *)
 
+module Tmap=Map.Make(struct type t=typ let compare=compare end)
+
+let t_env = ref (Tmap.add Tnothing 0 (Tmap.add Tbool 1 (Tmap.add Tint64 2 (Tmap.add Tstring 3 (Tmap.add Tany 4 (Tmap.empty))))))
+
+let j_call = ref 0 (* référence du nombre d'appels de fonction en tout, le j-ème
+                      appel compilant des function_j_i pour 0<=i<n où n est le nombre
+                      de fonctions candidates à l'appel selon le type des arguments *)
+
 let shift_level env =
     Smap.map (fun (o,l)-> (o,l+1)) env
 
@@ -75,15 +83,18 @@ let rec compile_expr loc_env e =
     et du prochain identifiant à attribuer*)
     match e.tdesc with 
     | Tprint l -> let lc= 
-                    List.map (fun e -> (compile_expr loc_env e) ++ (call "print") ++ (addq (imm 16) !%rsp)) l in 
+                    List.map (fun e -> (compile_expr loc_env e) ++
+                    (call "print") ++ (addq (imm 16) !%rsp)) l in 
                     List.fold_left (++) nop lc ++
                     pushq (imm 0) ++
                     pushq (imm 0) (*l'expression print l vaut nothing*)
     | TEint i -> movq (imm64 i) !%rax ++ pushq !%rax ++
-                pushq (imm 1)
+                let ti = Tmap.find Tint64 !t_env in
+                pushq (imm (2*ti))
     | TEbool b -> let i=(if b then 1 else 0) in 
                 pushq (imm i) ++
-                pushq (imm 2)
+                let tb = Tmap.find Tbool !t_env in
+                pushq (imm (2*tb))
 
     | TEstring s -> begin 
                     let i= (match Smap.mem s ( !string_map) with 
@@ -94,50 +105,60 @@ let rec compile_expr loc_env e =
                     
                     in leaq (lab (".str_"^string_of_int(i))) rax ++
                     pushq !%rax ++
-                    pushq (imm 3) 
+                    let ts = Tmap.find Tstring !t_env  in
+                    pushq (imm (2*ts)) 
                     end 
 
     | TEbinop(op,e1,e2) -> compile_expr loc_env e2 ++
-                        compile_expr loc_env e1 ++ (*à ce stade, e1 puis e2 sont en sommet de pile*)
-                        addq (imm 8) !%rsp ++ (*on ignore le type de e1, à préciser à l'avenir*)
+                        compile_expr loc_env e1 ++
+                        (*à ce stade, e1 puis e2 sont en sommet de pile*)
+                        addq (imm 8) !%rsp ++
+                        (*on ignore le type de e1, à préciser à l'avenir*)
                         popq rax ++ (*valeur de e1 dans rax*)
                         addq (imm 8) !%rsp ++
                         popq rbx ++
-                        compile_binop op ++ (*à ce stade, la valeur de e1 op e2 est dans rax*)
+                        compile_binop op ++
+                        (*à ce stade, la valeur de e1 op e2 est dans rax*)
                         pushq !%rax ++
                         (match op with 
-                        | Ar(_) -> pushq (imm 1) (*la valeur est un entier*)
-                        | _ -> pushq (imm 2)) (*la valeur est un booléen*)
+                        | Ar(_) -> let ti = Tmap.find Tint64 !t_env in 
+                                   pushq (imm (2*ti))
+                                   (*la valeur est un entier*)
+                        | _ -> let tb = Tmap.find Tbool !t_env in pushq (imm (2*tb)))
+                                    (*la valeur est un booléen*)
     
     | TEnot(e1) -> compile_expr loc_env e1 ++
                     addq (imm 8) !%rsp ++
                     popq rbx ++
-                    movq (imm 1) !%rax ++
-                    subq !%rbx !%rax ++ (*1-e1, le not(1) faisait -2 (bit à bit en complément à 2 ?)*)
+                    movq (imm 2) !%rax ++
+                    subq !%rbx !%rax ++
+                    (*1-e1, le not(1) faisait -2 (bit à bit en complément à 2 ?)*)
                     pushq !%rax ++
-                    pushq (imm 2)
+                    let tb = Tmap.find Tbool !t_env in
+                    pushq (imm (2*tb))
 
     | TEminus(e1) -> compile_expr loc_env e1 ++
                     addq (imm 8) !%rsp ++
                     popq rax ++
                     negq !%rax ++
                     pushq !%rax ++
-                    pushq (imm 1)
+                    let ti = Tmap.find Tint64 !t_env in
+                    pushq (imm (2*ti))
     
     | TEaffect(e1, e2) -> begin match e1.tdesc with
                           | TEvar(x) -> compile_expr loc_env e2 ++
                                         popq rax ++ popq rbx ++
-                                        (try 
-                                        let (o,l) = Smap.find x loc_env in 
-                                        movq (imm l) !%rdx ++
-                                        movq !%rbp !%rcx ++
-                                        call "get_var" ++
-                                        movq !%rax (ind ~ofs:o rcx) ++
-                                        movq !%rbx (ind ~ofs:(o+8) rcx)
+                                        begin try 
+                                            let (o,l) = Smap.find x loc_env in 
+                                            movq (imm l) !%rdx ++
+                                            movq !%rbp !%rcx ++
+                                            call "get_var" ++
+                                            movq !%rax (ind ~ofs:o rcx) ++
+                                            movq !%rbx (ind ~ofs:(o+8) rcx)
                                         with Not_found -> 
-                                       movq !%rax (ind ("_t_"^x)) ++
-                                       movq !%rbx (ind ("_v_"^x)) ) ++
-
+                                            movq !%rax (ind ("_t_"^x)) ++
+                                            movq !%rbx (ind ("_v_"^x))
+                                       end ++
                                        pushq !%rbx ++ 
                                        pushq !%rax (*l'expression x=a vaut a*)
                           
@@ -178,7 +199,8 @@ let rec compile_expr loc_env e =
                     pushq !%rbp ++
                     movq !%rsp !%rbp ++ 
 
-                    alloc_var (Smap.cardinal loc_spec) ++ (*on alloue la place nécessaire pour les variables locales*)
+                    alloc_var (Smap.cardinal loc_spec) ++
+                    (*on alloue la place nécessaire pour les variables locales*)
 
                     label ("instr_"^string_of_int(i)) ++
                     compile_expr sup c ++
@@ -204,8 +226,8 @@ let rec compile_expr loc_env e =
                         
                         let sup = shift_level loc_env in
 
-                        let loc =Smap.add x (-16,0) (union_alloc sup loc_spec (-16)) in 
-                        
+                        let loc =Smap.add x (-16,0) (union_alloc sup loc_spec (-16)) in
+
                         pushq !%rbp ++
                         movq !%rsp !%rbp ++
 
@@ -247,11 +269,10 @@ let rec compile_expr loc_env e =
                         cmpq (imm 2) !%rbx ++
                         jne "expected_bool" ++
                         testq !%rax !%rax ++
-                        je ("instr_"^string_of_int(i)) ++   
-                         
+                        je ("instr_"^string_of_int(i+1)) ++   
                         compile_expr loc_env a ++
                         jmp ("end_instr_"^string_of_int(i)) ++
-                        label ("instr_"^string_of_int(i)) ++
+                        label ("instr_"^string_of_int(i+1)) ++
                         compile_expr loc_env b ++
                         jmp ("end_instr_"^string_of_int(i)) ++
                         label ("end_instr_"^string_of_int(i))
@@ -322,21 +343,26 @@ let print_f =
     movq (ind ~ofs:16 rbp) !%rsi ++ (*premier composant : le tag*)
     movq (ind ~ofs:24 rbp) !%rdi ++ (*deuxième composant : le truc à afficher*)
 
-    cmpq (imm 1) !%rsi ++
+    let ti = Tmap.find Tint64 !t_env in 
+    cmpq (imm (2*ti)) !%rsi ++
     je "print_int" ++
 
-    cmpq (imm 2) !%rsi ++
+    let tb = Tmap.find Tbool !t_env in
+    cmpq (imm (2*tb)) !%rsi ++
     je "print_bool" ++
 
-    cmpq (imm 3) !%rsi ++
+    let ts = Tmap.find Tstring !t_env in
+    cmpq (imm (2*ts)) !%rsi ++
     je "print_string" ++
 
     leaq (lab ".implementation_error") rdi ++
     movq (imm 0) !%rax ++
     call "printf" ++
+    movq (imm 1) !%rax ++
+    ret ++
 
-
-    (*dans les faits, ici il faudra faire un print pour chaque structure*)
+    (*dans les faits, ici il faudra faire un print pour chaque structure
+     * -> càd écrire "l'identifiant de la structure"(les valeurs des champs) *)
 
     label "end_print" ++
     movq !%rbp !%rsp ++
@@ -450,6 +476,19 @@ let errors =
     movq (imm 1) !%rax ++
     ret
 
+    
+(*
+let rec create_f_env args = Smap.empty
+
+let rec compile_f f l i = begin match l with
+    | [] -> nop
+    | f_i::q -> label ("function_"^f^(string_of_int(i))) ++
+                compile_expr (create_f_env f_i.tfargr) f_i.tfinstrr ++
+                ret ++
+                compile_f f q (i+1)
+    end
+*)
+
 let compile (decls, funs, structsi,vars) ofile =
 
  
@@ -457,6 +496,7 @@ let compile (decls, funs, structsi,vars) ofile =
     let code = List.fold_right (++) code nop in
     let variables = Smap.fold (fun x _ acc -> label ("_v_"^x) ++ (dquad [0]) ++
                     label ("_t_"^x) ++ (dquad [0]) ++ acc) vars nop in
+    (*let functions = Smap.fold (fun f l acc -> compile_f f l 0 ++ acc ) funs nop in*)
     let d = print_data in 
     let s = print_string_labels ( !string_map) in 
     let pgm =
