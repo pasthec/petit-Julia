@@ -35,15 +35,15 @@ let rec alloc_var n =
 let string_map = ref Smap.empty and string_id = ref 0 
 let instr_id = ref 0 
 
-let alloc loc_var=
+let alloc loc_var o=
     (*dictionnaire des variables locales, renvoie un ofs par rapport à rbp pour chacune des variables*)
-    let ofs= ref 0 in 
+    let ofs= ref o in 
     Smap.map (fun t-> ofs:= !ofs -16; (!ofs,0)) loc_var
 
-let union_alloc sup_vars loc_vars=
+let union_alloc sup_vars loc_vars ofs=
     (*décale les ofsets de sup_vars de ofs, et ajoute les variables locales spécifiques*)
 
-    let vars_loc= alloc loc_vars in 
+    let vars_loc= alloc loc_vars ofs in 
     Smap.union Typer.fc sup_vars vars_loc 
 
 let compile_binop op =
@@ -202,7 +202,7 @@ let rec compile_expr loc_env funs e =
                     
                     let sup = shift_level loc_env in
 
-                    let loc =union_alloc sup loc_spec
+                    let loc =union_alloc sup loc_spec 0
                     in 
                     
 
@@ -239,7 +239,7 @@ let rec compile_expr loc_env funs e =
                         
                         let sup = shift_level loc_env in
 
-                        let loc =Smap.add x (24,0) (union_alloc sup loc_spec) in
+                        let loc =Smap.add x (24,0) (union_alloc sup loc_spec 0) in
 
 
                         (*on alloue la place nécessaire pour les variables locales en initialisant à nothing*)
@@ -335,7 +335,7 @@ and compile_f funs env f j i =
     in 
 
     let sup = shift_level env in
-    let loc = union_alloc sup loc_spec in
+    let loc = union_alloc sup loc_spec 8 in
 
     let args = f_i.tfargr in
     let f_env = build_f_env args loc 0 in
