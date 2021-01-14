@@ -343,9 +343,11 @@ and compile_f funs env f j i =
     functions := label ("function_"^string_of_int(j)^"_"^string_of_int(i)) ++
                  pushq !%rbp ++
                  movq !%rsp !%rbp ++
+                 alloc_var (Smap.cardinal loc_spec) ++
                  compile_expr f_env funs instrs ++
                  popq rbx ++
                  popq rax ++
+                 movq !%rbp !%rsp ++
                  popq rbp ++
                  ret ++
                  !functions
