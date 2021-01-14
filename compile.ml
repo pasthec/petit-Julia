@@ -245,9 +245,9 @@ let rec compile_expr loc_env funs e =
                         (*on alloue la place nécessaire pour les variables locales en initialisant à nothing*)
 
             
-                        compile_expr sup funs e1 ++ (*e1 se trouve à la place de la valeur x*)
+                        compile_expr loc_env funs e1 ++ (*e1 se trouve à la place de la valeur x*)
 
-                        compile_expr sup funs e2 ++
+                        compile_expr loc_env funs e2 ++
                         (*on compile e2 une fois*)
                         label ("instr_"^string_of_int(i)) ++
                         pushq !%rbp ++
