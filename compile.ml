@@ -56,14 +56,13 @@ let compile_binop op =
     | Ar(Div) -> cqto ++ idivq !%rbx
     | Ar(Mod) -> cqto ++ idivq !%rbx ++ movq !%rdx !%rax
     | Ar(Exp) -> call "fast_exp"
-    | Bop(And) -> andq !%rbx !%rax 
-    | Bop(Or) -> orq !%rbx !%rax 
     | Eq(Equal) -> call "comp_equal"
     | Eq(Different) -> call "comp_different"
     | Comp(Infeq) -> call "comp_infeq"
     | Comp(Inf) -> call "comp_inf"
     | Comp(Supeq) -> call "comp_supeq"
     | Comp(Sup) -> call "comp_sup"
+    | _ -> failwith "boolean operators treated separately"
 
 let get_vars =
     (*level est dans rdx, rbp de ce level est dans rcx, laisse le rbp final dans rdx *)
@@ -118,6 +117,47 @@ let rec compile_expr loc_env funs e =
                     pushq (imm (2*ts)) 
                     end 
 
+    
+    | TEbinop(Bop(And),e1,e2) ->let i= !instr_id in 
+                                incr instr_id; (*évaluation paresseuse*)
+                                compile_expr loc_env funs e1 ++
+                                popq rax ++
+                                popq rbx ++
+                                cmpq (imm 0) !%rbx ++
+                                je ("instr_false_"^string_of_int(i)) ++
+                                compile_expr loc_env funs e2 ++
+                                popq rax ++
+                                popq rbx ++
+                                cmpq (imm 0) !%rbx ++
+                                je ("instr_false_"^string_of_int(i)) ++
+                                movq (imm 1) !%rbx ++
+                                jmp ("end_instr_"^string_of_int(i)) ++
+                                label ("instr_false_"^string_of_int(i)) ++
+                                movq (imm 0) !%rbx ++
+                                label ("end_instr_"^string_of_int(i)) ++
+                                pushq !%rbx ++
+                                let tb = Tmap.find Tbool !t_env in pushq (imm (2*tb))
+
+    | TEbinop(Bop(Or),e1,e2) -> let i= !instr_id in 
+                                incr instr_id;
+                                compile_expr loc_env funs e1 ++
+                                popq rax ++
+                                popq rbx ++
+                                cmpq (imm 1) !%rbx ++
+                                je ("instr_true_"^string_of_int(i)) ++
+                                compile_expr loc_env funs e2 ++
+                                popq rax ++
+                                popq rbx ++
+                                cmpq (imm 1) !%rbx ++
+                                je ("instr_true_"^string_of_int(i)) ++
+                                movq (imm 1) !%rbx ++
+                                jmp ("end_instr_"^string_of_int(i)) ++
+                                label ("instr_true_"^string_of_int(i)) ++
+                                movq (imm 1) !%rbx ++
+                                label ("end_instr_"^string_of_int(i)) ++
+                                pushq !%rbx ++
+                                let tb = Tmap.find Tbool !t_env in pushq (imm (2*tb))
+    
     | TEbinop(op,e1,e2) -> compile_expr loc_env funs e2 ++
                         compile_expr loc_env funs e1 ++
                         (*à ce stade, e1 puis e2 sont en sommet de pile*)
