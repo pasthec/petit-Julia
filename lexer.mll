@@ -44,6 +44,33 @@ let assert_not_kwd s= (*sert pour s'assurer qu'un par-ident ou un int-indent ne 
   et qu'il serait difficile de propager*)
   if (Hashtbl.mem h1 s) || (Hashtbl.mem h2 s) then
     raise Parser.Error
+
+
+let esc_backslash s =
+  let n=String.length s and i=ref 0 in 
+  let res = ref "" in 
+  while !i < n do 
+    match s.[!i] with 
+      | '\\' when !i < n-1 -> begin 
+
+                          match s.[!i +1] with 
+                          | 'n' -> res:= !res ^ "\n";
+                                  incr i;
+                                  incr i
+                          | 't' -> res:= !res ^ "\t";
+                                  incr i;
+                                  incr i
+                          | '\\' -> res:= !res ^ "\\";
+                                    incr i ;
+                                    incr i 
+                          | _ -> res := !res ^ (String.sub s ( !i) 1);
+                                incr i end 
+      
+      | _ -> res:= !res ^ (String.sub s ( !i) 1);
+              incr i 
+
+  done;
+  !res 
 }
 
 let digit = ['0'-'9']
@@ -91,7 +118,7 @@ rule token=parse
                         IDENT_LPAR s}
 
     | "\"" (jchar* as s) "\"" {before_auto_semicolon:=true;
-                                    JSTRING s}
+                                    JSTRING (esc_backslash s)}
 
     | "(" {before_auto_semicolon:=false; LPAR}
     | ")" {before_auto_semicolon:=true; RPAR} 
