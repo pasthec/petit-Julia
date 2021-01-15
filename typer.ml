@@ -9,6 +9,12 @@ exception Error of Ast.loc*string
 let error (loc,s)= 
   raise (Error (loc,s))
 
+let nb_call = ref 0
+
+let new_call () =
+    incr nb_call;
+    !nb_call -1
+
 (*fichier qui type
 
 fonction typing f : prend en argument l'objet de type Ast.file du parseur*)
@@ -55,7 +61,7 @@ and tdesc =
 | TEnot of texpr 
 | TEminus of texpr
 | TIfElse of texpr*texpr*texpr (*les bloc sont devenus des expr TEblock (pour leur donner un type) *)
-| TEcallf of ident*int list*texpr list (*appel de fonction*)
+| TEcallf of ident*int list*texpr list*int (*appel de fonction*)
 | TEcalls of ident*texpr list (*création de structure*)
 | Tprint of texpr list (*le print est une fonction à part*)
 | TEarg of texpr*ident (*champ d'une structure, Earg (e,x)=e.x *)
@@ -453,7 +459,7 @@ let rec type_expr t_return env e =
 
                         match pot_f with
                             | _,[],[] -> error (e.loc,"No function matches the call type")
-                            | _,[i],[f] -> {ttype=f.tfres; tdesc=TEcallf(name,[i],l)}
+                            | _,[i],[f] -> {ttype=f.tfres; tdesc=TEcallf(name,[i],l,new_call())}
                             | _,indexes,comp_funs -> (*plusieurs fonctions correspondent aux types donnés en entrées*)
                                   begin 
                                   if List.for_all (fun exp -> exp.ttype<> Tany) l &&
@@ -467,9 +473,9 @@ let rec type_expr t_return env e =
 
                                   let t=(List.hd comp_funs).tfres in 
                                   if List.for_all (fun f -> f.tfres=t) (List.tl comp_funs) then 
-                                    {ttype=t;tdesc= TEcallf(name,indexes,l)}
+                                    {ttype=t;tdesc= TEcallf(name,indexes,l,new_call())}
                                   (*tous les types de retour des fonctions compatibles sont identiques*)
-                                  else {ttype=Tany; tdesc=TEcallf (name,indexes,l)} end
+                                  else {ttype=Tany; tdesc=TEcallf (name,indexes,l,new_call())} end
                                   (*différents types de retour possibles, on renvoie Any*)
 
                         with Not_found -> error (e.loc,"Unbound function "^name)

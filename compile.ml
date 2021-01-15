@@ -3,12 +3,13 @@ open X86_64
 open Format
 open Typer
 
-
 module Smap=Typer.Smap (*Map.Make(struct type t=string let compare=compare end) *)
 
 module Tmap=Map.Make(struct type t=typ let compare=compare end)
 
 let t_env = ref (Tmap.add Tnothing 0 (Tmap.add Tbool 1 (Tmap.add Tint64 2 (Tmap.add Tstring 3 (Tmap.add Tany 4 (Tmap.empty))))))
+
+let f_implems = Hashtbl.create 2048
 
 (*
 let j_call = ref 0 (* référence du nombre d'appels de fonction en tout, le j-ème
@@ -16,8 +17,6 @@ let j_call = ref 0 (* référence du nombre d'appels de fonction en tout, le j-�
                       de fonctions candidates à l'appel selon le type des arguments *)
 *)
 (* finalement c'est aussi simple d'utiliser instr_id *)
-
-let functions = ref nop
 
 let shift_level env =
     Smap.map (fun (o,l)-> (o,l+1)) env
@@ -368,11 +367,12 @@ let rec compile_expr loc_env funs e =
                         pushq (imm 0) ++ pushq (imm 0)
 
     | TIfElse(s,a,b) -> let i= !instr_id in
+                        let tb = Tmap.find Tbool !t_env in
                         incr instr_id;
                         compile_expr loc_env funs s ++
                         popq rbx ++ popq rax ++
-                        cmpq (imm 2) !%rbx ++
-                        jne "expected_bool" ++
+                        cmpq (imm (2*tb)) !%rbx ++
+                        jne "type_error" ++
                         testq !%rax !%rax ++
                         je ("instr_"^string_of_int(i+1)) ++   
                         compile_expr loc_env funs a ++
@@ -383,7 +383,7 @@ let rec compile_expr loc_env funs e =
                         label ("end_instr_"^string_of_int(i))
 
 
-    | TEcallf(f,lpot,e_args) -> let j = !instr_id in incr instr_id;
+    | TEcallf(f,lpot,e_args,icall) -> 
                               (* on commence par compiler les arguments *)
                               let args_compiled =
                               List.map (compile_expr loc_env funs) e_args in
@@ -394,13 +394,20 @@ let rec compile_expr loc_env funs e =
                                * actuel *)
 
 
-                             (List.iter (compile_f funs loc_env f j) lpot; nop)
+                              begin
+                                  if not (Hashtbl.mem f_implems icall) then(
+                                    Hashtbl.add f_implems icall [];
+                                    Hashtbl.replace f_implems icall
+                                    (List.map (compile_f funs loc_env f icall) lpot);
+                                  );
+                              nop
+                              end
 
                               (* enfin on explore l'arbre des possibilités selon le
                                * type des arguments compilés, et on appelle la bonne
                                * fonction selon les cas *)
 
-                              ++ call ("function_"^string_of_int(j)^"_0") ++
+                              ++ call ("function_"^string_of_int(icall)^"_0") ++
                               
                               (* on désaloue les arguments *)
                               addq (imm (16*(List.length e_args))) !%rsp ++
@@ -432,17 +439,16 @@ and compile_f funs env f j i =
     let args = f_i.tfargr in
     let f_env = build_f_env args loc 0 in
 
-    functions := label ("function_"^string_of_int(j)^"_"^string_of_int(i)) ++
-                 pushq !%rbp ++
-                 movq !%rsp !%rbp ++
-                 alloc_var (Smap.cardinal loc_spec) ++
-                 compile_expr f_env funs instrs ++
-                 popq rbx ++
-                 popq rax ++
-                 movq !%rbp !%rsp ++
-                 popq rbp ++
-                 ret ++
-                 !functions
+    label ("function_"^string_of_int(j)^"_"^string_of_int(i)) ++
+    pushq !%rbp ++
+    movq !%rsp !%rbp ++
+    alloc_var (Smap.cardinal loc_spec) ++
+    compile_expr f_env funs instrs ++
+    popq rbx ++
+    popq rax ++
+    movq !%rbp !%rsp ++
+    popq rbp ++
+    ret 
 
 let compile_instr funs decl = 
     begin match decl with
@@ -680,6 +686,11 @@ let compile (decls, funs, structsi,vars) ofile =
     (*let functions = Smap.fold (fun f l acc -> compile_f f l 0 ++ acc ) funs nop in*)
     let d = print_data in 
     let s = print_string_labels ( !string_map) in 
+    
+    let functions = Hashtbl.fold
+                    (fun _ l_implems acc -> (List.fold_right (++) l_implems nop) ++ acc)
+                    f_implems nop in
+
     let pgm =
         { text =
             globl "main" ++ label "main" ++
@@ -695,7 +706,7 @@ let compile (decls, funs, structsi,vars) ofile =
             comparisons ++
             get_vars ++
             errors ++
-            !functions ++
+            functions ++
             ins ""; (* on saute une ligne pour aérer *)
           data =
               variables ++ d ++ s
