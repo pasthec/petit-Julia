@@ -335,7 +335,7 @@ and compile_f funs env f j i =
     in 
 
     let sup = shift_level env in
-    let loc = union_alloc sup loc_spec 8 in
+    let loc = union_alloc sup loc_spec 0 in
 
     let args = f_i.tfargr in
     let f_env = build_f_env args loc 0 in
