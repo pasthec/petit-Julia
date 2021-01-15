@@ -491,6 +491,7 @@ let fast_exp =
     movq (imm 0) !%rax ++
     call "printf" ++
     movq (imm 1) !%rax ++
+    movq !%r15 !%rsp ++
     ret
 
 let print_f =
@@ -521,6 +522,7 @@ let print_f =
     movq (imm 0) !%rax ++
     call "printf" ++
     movq (imm 1) !%rax ++
+    movq !%r15 !%rsp ++
     ret ++
 
     (*dans les faits, ici il faudra faire un print pour chaque structure
