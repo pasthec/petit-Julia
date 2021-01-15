@@ -387,7 +387,7 @@ let rec compile_expr loc_env funs e =
                               (* on commence par compiler les arguments *)
                               let args_compiled =
                               List.map (compile_expr loc_env funs) e_args in
-                              List.fold_left (++) nop args_compiled ++
+                              List.fold_right (++) (List.rev args_compiled) nop ++
 
                               (* puis on construit l'environnement local de la fonction
                                * et on compile chaque variante dans l'environnement
