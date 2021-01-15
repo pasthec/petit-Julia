@@ -46,23 +46,30 @@ let union_alloc sup_vars loc_vars ofs=
     let vars_loc= alloc loc_vars ofs in 
     Smap.union Typer.fc sup_vars vars_loc 
 
-let compile_binop op =
+let compile_arith_op op =
     (*code assembleur de l'opération binaire e1 op e2 où la valeur de 1 est dans rax et celle de e2 dans rbx
     met le résultat dans rax*)
     match op with 
-    | Ar(Plus) -> addq !%rbx !%rax 
-    | Ar(Minus) -> subq !%rbx !%rax
-    | Ar(Times) -> imulq !%rbx !%rax
-    | Ar(Div) -> cqto ++ idivq !%rbx
-    | Ar(Mod) -> cqto ++ idivq !%rbx ++ movq !%rdx !%rax
-    | Ar(Exp) -> call "fast_exp"
-    | Eq(Equal) -> call "comp_equal"
-    | Eq(Different) -> call "comp_different"
-    | Comp(Infeq) -> call "comp_infeq"
-    | Comp(Inf) -> call "comp_inf"
-    | Comp(Supeq) -> call "comp_supeq"
-    | Comp(Sup) -> call "comp_sup"
-    | _ -> failwith "boolean operators treated separately"
+    | Plus -> addq !%rbx !%rax 
+    | Minus -> subq !%rbx !%rax
+    | Times -> imulq !%rbx !%rax
+    | Div -> cqto ++ idivq !%rbx
+    | Mod -> cqto ++ idivq !%rbx ++ movq !%rdx !%rax
+    | Exp -> call "fast_exp"
+
+let compile_eq_op op =
+    match op with 
+    | Equal -> call "comp_equal"
+    | Different -> call "comp_different"
+
+
+let compile_comp_op op=
+    match op with 
+    | Infeq -> call "comp_infeq"
+    | Inf -> call "comp_inf"
+    | Supeq -> call "comp_supeq"
+    | Sup -> call "comp_sup"
+    
 
 let get_vars =
     (*level est dans rdx, rbp de ce level est dans rcx, laisse le rbp final dans rdx *)
@@ -120,13 +127,18 @@ let rec compile_expr loc_env funs e =
     
     | TEbinop(Bop(And),e1,e2) ->let i= !instr_id in 
                                 incr instr_id; (*évaluation paresseuse*)
+                                let tb=Tmap.find Tbool !t_env in
                                 compile_expr loc_env funs e1 ++
                                 popq rax ++
+                                cmpq (imm (2*tb)) !%rax ++ (* on vérifie à la fois qu'on a un booléen et qu'il est défini*)
+                                jne "type_error" ++
                                 popq rbx ++
                                 cmpq (imm 0) !%rbx ++
                                 je ("instr_false_"^string_of_int(i)) ++
                                 compile_expr loc_env funs e2 ++
                                 popq rax ++
+                                cmpq (imm (2*tb)) !%rax ++ 
+                                jne "type_error" ++
                                 popq rbx ++
                                 cmpq (imm 0) !%rbx ++
                                 je ("instr_false_"^string_of_int(i)) ++
@@ -136,17 +148,22 @@ let rec compile_expr loc_env funs e =
                                 movq (imm 0) !%rbx ++
                                 label ("end_instr_"^string_of_int(i)) ++
                                 pushq !%rbx ++
-                                let tb = Tmap.find Tbool !t_env in pushq (imm (2*tb))
+                                pushq (imm (2*tb))
 
     | TEbinop(Bop(Or),e1,e2) -> let i= !instr_id in 
                                 incr instr_id;
+                                let tb=Tmap.find Tbool !t_env in
                                 compile_expr loc_env funs e1 ++
                                 popq rax ++
+                                cmpq (imm (2*tb)) !%rax ++ 
+                                jne "type_error" ++
                                 popq rbx ++
                                 cmpq (imm 1) !%rbx ++
                                 je ("instr_true_"^string_of_int(i)) ++
                                 compile_expr loc_env funs e2 ++
                                 popq rax ++
+                                cmpq (imm (2*tb)) !%rax ++ 
+                                jne "type_error" ++
                                 popq rbx ++
                                 cmpq (imm 1) !%rbx ++
                                 je ("instr_true_"^string_of_int(i)) ++
@@ -158,24 +175,55 @@ let rec compile_expr loc_env funs e =
                                 pushq !%rbx ++
                                 let tb = Tmap.find Tbool !t_env in pushq (imm (2*tb))
     
-    | TEbinop(op,e1,e2) -> compile_expr loc_env funs e2 ++
+    | TEbinop(Ar(op),e1,e2) -> let ti = Tmap.find Tint64 !t_env in 
+        
+                        compile_expr loc_env funs e2 ++
                         compile_expr loc_env funs e1 ++
                         (*à ce stade, e1 puis e2 sont en sommet de pile*)
-                        addq (imm 8) !%rsp ++
-                        (*on ignore le type de e1, à préciser à l'avenir*)
+                        popq rax ++
+                        cmpq (imm (2*ti)) !%rax ++
+                        jne "type_error" ++
+                        (*on vérifie qu'on a bien un entier*)
                         popq rax ++ (*valeur de e1 dans rax*)
-                        addq (imm 8) !%rsp ++
                         popq rbx ++
-                        compile_binop op ++
+                        cmpq (imm (2*ti)) !%rbx ++
+                        jne "type_error" ++
+                        popq rbx ++
+                        compile_arith_op op ++
                         (*à ce stade, la valeur de e1 op e2 est dans rax*)
                         pushq !%rax ++
-                        (match op with 
+                        pushq (imm (2*ti))
+                        
+
+                        (*(match op with 
                         | Ar(_) -> let ti = Tmap.find Tint64 !t_env in 
-                                   pushq (imm (2*ti))
+                                   
                                    (*la valeur est un entier*)
                         | _ -> let tb = Tmap.find Tbool !t_env in pushq (imm (2*tb)))
-                                    (*la valeur est un booléen*)
-    
+                                    (*la valeur est un booléen*)*)
+    | TEbinop(Comp(op),e1,e2) -> compile_expr loc_env funs e2 ++
+                                compile_expr loc_env funs e1 ++
+                                popq rcx ++
+                                popq rax ++
+                                popq rdx ++
+                                popq rbx ++
+                                compile_comp_op op ++
+                                pushq !%rax ++
+                                let tb = Tmap.find Tbool !t_env in pushq (imm (2*tb))
+
+    | TEbinop(Eq(op),e1,e2) -> let tb = Tmap.find Tbool !t_env in
+                                compile_expr loc_env funs e2 ++
+                                compile_expr loc_env funs e1 ++
+                                addq (imm 8) !%rsp ++
+                                popq rax ++
+                                addq (imm 8) !%rsp ++
+                                popq rbx ++
+                                movq (imm (2*tb)) !%rcx ++ (*permet de passer le test de type de comparaison*)
+                                movq (imm (2*tb)) !%rdx ++
+                                compile_eq_op op  ++
+                                pushq !%rax ++
+                                 pushq (imm (2*tb))
+
     | TEnot(e1) -> compile_expr loc_env funs e1 ++
                     addq (imm 8) !%rsp ++
                     popq rbx ++
@@ -527,8 +575,8 @@ let print_data =  (*penser à virer les \n pour ne pas faire doublon avec printl
     string "not yet implemented\n"  ++
     label ".negative_exp" ++
     string "Exponents should be nonnegative\n" ++
-    label ".expected_bool" ++
-    string "ERROR: TypeError: non-boolean used in boolean context\n"
+    label ".bad_type" ++
+    string "ERROR: Bad Type or Variable not Defined \n"
 
 let print_string_label s i =
     label (".str_"^string_of_int(i)) ++
@@ -572,19 +620,36 @@ let comparisons =
 
     label "comp_true" ++ 
     movq (imm 1) !%rax ++
-    ret ++
+    jmp "comp_type_1" ++
 
     label "comp_false" ++
     movq (imm 0)  !%rax ++
+
+    label "comp_type_1" ++
+    let ti = Tmap.find Tint64 !t_env in 
+    cmpq (imm (2*ti)) !%rcx ++
+    je "comp_type_2" ++ (*on a un entier, on teste le deuxième type*)
+    let tb = Tmap.find Tbool !t_env in 
+    cmpq (imm (2*tb)) !%rcx ++ (*pas d'entier, on teste si booléen*)
+    jne "type_error" ++ (*ni entier ni booléen*)
+
+    label "comp_type_2" ++
+    cmpq (imm (2*ti)) !%rdx ++
+    je "end_comp" ++
+    cmpq (imm (2*tb)) !%rdx ++
+    jne "type_error" ++
+
+    label "end_comp" ++ (*on a le bon type, et le résultat du test est dans rax*)
     ret 
 
 let errors =
-    label "expected_bool" ++
-    leaq (lab ".expected_bool") rdi ++
-    movq (imm 0) !%rax ++
-    call "printf" ++
+    label "type_error" ++ 
+    leaq (lab ".bad_type") rdi ++
+    call "printf" ++ 
+    movq !%r15 !%rsp ++
     movq (imm 1) !%rax ++
-    ret
+    ret 
+    
 
     
 (*
@@ -612,6 +677,7 @@ let compile (decls, funs, structsi,vars) ofile =
     let pgm =
         { text =
             globl "main" ++ label "main" ++
+            movq !%rsp !%r15 ++
             code ++
             movq (imm 0) !%rax ++ (* exit *)
             ret ++
