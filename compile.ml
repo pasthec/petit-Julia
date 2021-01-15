@@ -225,21 +225,25 @@ let rec compile_expr loc_env funs e =
                                  pushq (imm (2*tb))
 
     | TEnot(e1) -> compile_expr loc_env funs e1 ++
-                    addq (imm 8) !%rsp ++
+                    let tb = Tmap.find Tbool !t_env in 
+                    popq rax ++
+                    cmpq (imm (2*tb)) !%rax ++
+                    jne "type_error" ++
                     popq rbx ++
                     movq (imm 2) !%rax ++
                     subq !%rbx !%rax ++
                     (*1-e1, le not(1) faisait -2 (bit à bit en complément à 2 ?)*)
                     pushq !%rax ++
-                    let tb = Tmap.find Tbool !t_env in
                     pushq (imm (2*tb))
 
     | TEminus(e1) -> compile_expr loc_env funs e1 ++
-                    addq (imm 8) !%rsp ++
+                    let ti = Tmap.find Tint64 !t_env in
+                    popq rax ++
+                    cmpq (imm (2*ti)) !%rax ++
+                    jne "type_error" ++
                     popq rax ++
                     negq !%rax ++
                     pushq !%rax ++
-                    let ti = Tmap.find Tint64 !t_env in
                     pushq (imm (2*ti))
     
     | TEaffect(e1, e2) -> begin match e1.tdesc with
