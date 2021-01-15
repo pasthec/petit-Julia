@@ -92,12 +92,12 @@ let rec build_f_env args env i = match args with
     | [] -> env
     | (x,_)::q -> build_f_env q (Smap.add x (16+16*i,0) env) (i+1)
 
-let rec compile_expr loc_env funs e =
+let rec compile_expr loc_env funs ret_depth e=
     (*string_set est un couple de références la table de hachage des strings déjà
      * existants et du prochain identifiant à attribuer*)
     match e.tdesc with 
     | Tprint l -> let lc= 
-                    List.map (fun e -> (compile_expr loc_env funs e) ++
+                    List.map (fun e -> (compile_expr loc_env funs ret_depth e) ++
                     (call "print") ++ (addq (imm 16) !%rsp)) l in 
                     List.fold_left (++) nop lc ++
                     pushq (imm 0) ++
@@ -127,14 +127,14 @@ let rec compile_expr loc_env funs e =
     | TEbinop(Bop(And),e1,e2) ->let i= !instr_id in 
                                 incr instr_id; (*évaluation paresseuse*)
                                 let tb=Tmap.find Tbool !t_env in
-                                compile_expr loc_env funs e1 ++
+                                compile_expr loc_env funs ret_depth e1 ++
                                 popq rax ++
                                 cmpq (imm (2*tb)) !%rax ++ (* on vérifie à la fois qu'on a un booléen et qu'il est défini*)
                                 jne "type_error" ++
                                 popq rbx ++
                                 cmpq (imm 0) !%rbx ++
                                 je ("instr_false_"^string_of_int(i)) ++
-                                compile_expr loc_env funs e2 ++
+                                compile_expr loc_env funs ret_depth e2 ++
                                 popq rax ++
                                 cmpq (imm (2*tb)) !%rax ++ 
                                 jne "type_error" ++
@@ -152,14 +152,14 @@ let rec compile_expr loc_env funs e =
     | TEbinop(Bop(Or),e1,e2) -> let i= !instr_id in 
                                 incr instr_id;
                                 let tb=Tmap.find Tbool !t_env in
-                                compile_expr loc_env funs e1 ++
+                                compile_expr loc_env funs ret_depth e1 ++
                                 popq rax ++
                                 cmpq (imm (2*tb)) !%rax ++ 
                                 jne "type_error" ++
                                 popq rbx ++
                                 cmpq (imm 1) !%rbx ++
                                 je ("instr_true_"^string_of_int(i)) ++
-                                compile_expr loc_env funs e2 ++
+                                compile_expr loc_env funs ret_depth e2 ++
                                 popq rax ++
                                 cmpq (imm (2*tb)) !%rax ++ 
                                 jne "type_error" ++
@@ -176,8 +176,8 @@ let rec compile_expr loc_env funs e =
     
     | TEbinop(Ar(op),e1,e2) -> let ti = Tmap.find Tint64 !t_env in 
         
-                        compile_expr loc_env funs e2 ++
-                        compile_expr loc_env funs e1 ++
+                        compile_expr loc_env funs ret_depth e2 ++
+                        compile_expr loc_env funs ret_depth e1 ++
                         (*à ce stade, e1 puis e2 sont en sommet de pile*)
                         popq rax ++
                         cmpq (imm (2*ti)) !%rax ++
@@ -200,8 +200,8 @@ let rec compile_expr loc_env funs e =
                                    (*la valeur est un entier*)
                         | _ -> let tb = Tmap.find Tbool !t_env in pushq (imm (2*tb)))
                                     (*la valeur est un booléen*)*)
-    | TEbinop(Comp(op),e1,e2) -> compile_expr loc_env funs e2 ++
-                                compile_expr loc_env funs e1 ++
+    | TEbinop(Comp(op),e1,e2) -> compile_expr loc_env funs ret_depth e2 ++
+                                compile_expr loc_env funs ret_depth e1 ++
                                 popq rcx ++
                                 popq rax ++
                                 popq rdx ++
@@ -211,8 +211,8 @@ let rec compile_expr loc_env funs e =
                                 let tb = Tmap.find Tbool !t_env in pushq (imm (2*tb))
 
     | TEbinop(Eq(op),e1,e2) -> let tb = Tmap.find Tbool !t_env in
-                                compile_expr loc_env funs e2 ++
-                                compile_expr loc_env funs e1 ++
+                                compile_expr loc_env funs ret_depth e2 ++
+                                compile_expr loc_env funs ret_depth e1 ++
                                 addq (imm 8) !%rsp ++
                                 popq rax ++
                                 addq (imm 8) !%rsp ++
@@ -223,7 +223,7 @@ let rec compile_expr loc_env funs e =
                                 pushq !%rax ++
                                  pushq (imm (2*tb))
 
-    | TEnot(e1) -> compile_expr loc_env funs e1 ++
+    | TEnot(e1) -> compile_expr loc_env funs ret_depth e1 ++
                     let tb = Tmap.find Tbool !t_env in 
                     popq rax ++
                     cmpq (imm (2*tb)) !%rax ++
@@ -235,7 +235,7 @@ let rec compile_expr loc_env funs e =
                     pushq !%rax ++
                     pushq (imm (2*tb))
 
-    | TEminus(e1) -> compile_expr loc_env funs e1 ++
+    | TEminus(e1) -> compile_expr loc_env funs ret_depth e1 ++
                     let ti = Tmap.find Tint64 !t_env in
                     popq rax ++
                     cmpq (imm (2*ti)) !%rax ++
@@ -246,7 +246,7 @@ let rec compile_expr loc_env funs e =
                     pushq (imm (2*ti))
     
     | TEaffect(e1, e2) -> begin match e1.tdesc with
-                          | TEvar(x) -> compile_expr loc_env funs e2 ++
+                          | TEvar(x) -> compile_expr loc_env funs ret_depth e2 ++
                                         popq rax ++ popq rbx ++
                                         begin try 
                                             let (o,l) = Smap.find x loc_env in 
@@ -280,7 +280,7 @@ let rec compile_expr loc_env funs e =
                     movq (ind ("_t_"^x)) !%rax ++ pushq !%rax
                 end 
 
-    | TEblock (b,_) -> let l=List.map (compile_expr loc_env funs) b in 
+    | TEblock (b,_) -> let l=List.map (compile_expr loc_env funs ret_depth) b in 
                       concat_depile l 
 
     | TEwhile(c,e1) -> let i = !instr_id in 
@@ -301,7 +301,7 @@ let rec compile_expr loc_env funs e =
 
                     label ("instr_"^string_of_int(i)) ++
                     
-                    compile_expr loc_env funs c ++ (*on compile la condition, si elle est fausse on saute en fin de boucle*)
+                    compile_expr loc_env funs ret_depth c ++ (*on compile la condition, si elle est fausse on saute en fin de boucle*)
                     popq rax ++
                     popq rbx ++
                     cmpq (imm 0) !%rbx ++
@@ -311,7 +311,7 @@ let rec compile_expr loc_env funs e =
 
                     alloc_var (Smap.cardinal loc_spec) ++
                     (*on alloue la place nécessaire pour les variables locales*)
-                    compile_expr loc funs e1 ++
+                    compile_expr loc funs (ret_depth+1) e1 ++
                      
                     movq !%rbp !%rsp ++
                     popq rbp ++ (*on désalloue toutes les variables locales de la boucle*)
@@ -336,9 +336,9 @@ let rec compile_expr loc_env funs e =
                         (*on alloue la place nécessaire pour les variables locales en initialisant à nothing*)
 
             
-                        compile_expr loc_env funs e1 ++ (*e1 se trouve à la place de la valeur x*)
+                        compile_expr loc_env funs ret_depth e1 ++ (*e1 se trouve à la place de la valeur x*)
 
-                        compile_expr loc_env funs e2 ++
+                        compile_expr loc_env funs ret_depth e2 ++
                         (*on compile e2 une fois*)
                         label ("instr_"^string_of_int(i)) ++
                         pushq !%rbp ++
@@ -351,7 +351,7 @@ let rec compile_expr loc_env funs e =
                         js ("end_instr_"^string_of_int(i)) ++
 
                         
-                        compile_expr loc funs e3 ++
+                        compile_expr loc funs (ret_depth+1) e3 ++
                         addq (imm 16) !%rsp ++
                         movq (ind ~ofs:32 rbp) !%rax ++
                         addq (imm 1) !%rax ++
@@ -369,16 +369,16 @@ let rec compile_expr loc_env funs e =
     | TIfElse(s,a,b) -> let i= !instr_id in
                         let tb = Tmap.find Tbool !t_env in
                         incr instr_id;
-                        compile_expr loc_env funs s ++
+                        compile_expr loc_env funs ret_depth s ++
                         popq rbx ++ popq rax ++
                         cmpq (imm (2*tb)) !%rbx ++
                         jne "type_error" ++
                         testq !%rax !%rax ++
                         je ("instr_"^string_of_int(i+1)) ++   
-                        compile_expr loc_env funs a ++
+                        compile_expr loc_env funs (ret_depth+1) a ++
                         jmp ("end_instr_"^string_of_int(i)) ++
                         label ("instr_"^string_of_int(i+1)) ++
-                        compile_expr loc_env funs b ++
+                        compile_expr loc_env funs (ret_depth+1) b ++
                         jmp ("end_instr_"^string_of_int(i)) ++
                         label ("end_instr_"^string_of_int(i))
 
@@ -386,7 +386,7 @@ let rec compile_expr loc_env funs e =
     | TEcallf(f,lpot,e_args,icall) -> 
                               (* on commence par compiler les arguments *)
                               let args_compiled =
-                              List.map (compile_expr loc_env funs) e_args in
+                              List.map (compile_expr loc_env funs ret_depth) e_args in
                               List.fold_right (++) (List.rev args_compiled) nop ++
 
                               (* puis on construit l'environnement local de la fonction
@@ -416,6 +416,26 @@ let rec compile_expr loc_env funs e =
                                * rempile donc pour que l'appel retourne ces valeurs *)
                               pushq !%rax ++ pushq !%rbx
 
+    | TEreturn(Some e) -> compile_expr loc_env funs ret_depth e ++
+                          popq rbx ++ popq rax ++
+                          
+
+                          movq (imm ret_depth) !%rdx ++
+                          movq !%rbp !%rcx ++
+                          call "get_var" ++
+                          
+                          movq !%rbp !%rsp ++
+                          popq rbp ++
+                          ret
+
+    | TEreturn(None) ->   movq (imm ret_depth) !%rdx ++
+                          movq !%rbp !%rcx ++
+                          call "get_var" ++
+                          
+                          movq !%rbp !%rsp ++
+                          popq rbp ++
+                          ret
+
     | _ -> pushq (imm 0) ++ (*toutes les expressions non implémentées equivaudront à un double nothing
                             sur la pile pour le moment (pour que tout soit de taille 2)*)
         pushq (imm 0)
@@ -442,8 +462,9 @@ and compile_f funs env f j i =
     label ("function_"^string_of_int(j)^"_"^string_of_int(i)) ++
     pushq !%rbp ++
     movq !%rsp !%rbp ++
+    movq !%rsp !%r14 ++
     alloc_var (Smap.cardinal loc_spec) ++
-    compile_expr f_env funs instrs ++
+    compile_expr f_env funs 0 instrs ++
     popq rbx ++
     popq rax ++
     movq !%rbp !%rsp ++
@@ -454,7 +475,7 @@ let compile_instr funs decl =
     begin match decl with
     | Tf _ -> nop
     | Ts _ -> nop
-    | Te e -> compile_expr Smap.empty funs e ++ 
+    | Te e -> compile_expr Smap.empty funs 0 e ++ 
             addq (imm 16) !%rsp (*on dépile la valeur de l'expression*)
     end
 
