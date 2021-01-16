@@ -19,6 +19,8 @@ let id_of_type = function
 
 let f_implems = Hashtbl.create 2048
 
+let gstructs = ref (Smap.empty)
+
 (*
 let j_call = ref 0 (* référence du nombre d'appels de fonction en tout, le j-ème
                       appel compilant des function_j_i pour 0<=i<n où n est le nombre
@@ -445,6 +447,31 @@ let rec compile_expr loc_env funs ret_depth e=
                           popq rbp ++
                           ret
 
+    | TEcalls(s,e) ->     pushq !%r14 ++
+                          movq (imm (2*(List.length e))) !%rdi ++
+                          ins "malloc" ++
+                          movq !%rax !%r14 ++
+                          let fields_compiled = List.map2
+                          (fun ei (x,tx) ->
+                              movq (imm (2*(id_of_type tx))) (ind r14) ++
+                              (* à modifier avec le truc qui donne l'indice en f°
+                                 de l'argument *)
+                              compile_expr loc_env funs ret_depth
+                              {ttype=tx; tdesc=TEaffect(
+                                  {ttype=tx;tdesc=TEarg(
+                                      {ttype=Tstruct(s); tdesc=TEvar(s)},x)
+                                  }
+                                  ,ei)
+                              } ++
+                              addq (imm 16) !%rsp
+                          )
+                          e (Smap.find s !gstructs).tsfields in
+                          List.fold_left (++) nop fields_compiled ++
+                          popq rax ++
+                          pushq !%r14 ++
+                          pushq (imm (id_of_type (Tstruct(s))) ) ++
+                          movq !%rax !%r14
+
     | _ -> pushq (imm 0) ++ (*toutes les expressions non implémentées equivaudront à un double nothing
                             sur la pile pour le moment (pour que tout soit de taille 2)*)
         pushq (imm 0)
@@ -705,9 +732,10 @@ let rec compile_f f l i = begin match l with
     end
 *)
 
-let compile (decls, funs, structsi,vars) ofile =
+let compile (decls, funs, structs,vars) ofile =
 
- 
+    gstructs := structs;
+
     let code = List.map (compile_instr funs) decls in
     let code = List.fold_right (++) code nop in
     let variables = Smap.fold (fun x _ acc -> label ("_v_"^x) ++ (dquad [0]) ++
