@@ -15,3 +15,22 @@ Le programme s'utilise en faisant `./pjuliac` suivi éventuellement des argument
 ```
 
 Le pretty printer permet d'afficher une représentation de l'ast obtenu après le parsing sous la forme d'un code petit-julia ( avec quelques différences comme les accolades pour les `if...else` pour délimiter leur portée ) pour pouvoir débugger ou éventuellement désoffusquer un code.
+
+
+Tests au 16/1 matin : 
+
+Tests de exec qui passent : arith, arith2,assign, bool, dispatch2, fact_it, fact_it2, fact_rec, fact_rec2, fib, for, for2, for3, for4, for5, hello_world, hello_world2, int64, lazy, many, mutual, quine, scope1, scope2, scope3, scope4, while
+Erreur sur : 
+
+dispatch1 : 
+/usr/bin/ld: /tmp/cc9BamYl.o: in function `main':                                                                       (.text+0x12): undefined reference to `function_0_0'                                                                     collect2: error: ld returned 1 exit status
+
+expo : 
+tests/exec/expo.s: Assembler messages:                                                                                  tests/exec/expo.s:785: Error: symbol `instr_6' is already defined  
+
+
+julia et mandelbrot : mauvais résultat
+
+queens : 
+tests/exec/queens.s: Assembler messages:
+tests/exec/queens.s:1432: Error: symbol `instr_17' is already defined
