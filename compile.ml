@@ -369,6 +369,7 @@ let rec compile_expr loc_env funs ret_depth e=
     | TIfElse(s,a,b) -> let i= !instr_id in
                         let tb = Tmap.find Tbool !t_env in
                         incr instr_id;
+                        incr instr_id;
                         compile_expr loc_env funs ret_depth s ++
                         popq rbx ++ popq rax ++
                         cmpq (imm (2*tb)) !%rbx ++
