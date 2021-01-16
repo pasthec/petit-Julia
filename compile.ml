@@ -697,7 +697,7 @@ let rec compile_f f l i = begin match l with
     end
 *)
 
-let compile (decls, funs, structsi,vars) ofile =
+let compile (decls, funs, structsi,vars, fields) ofile =
 
  
     let code = List.map (compile_instr funs) decls in

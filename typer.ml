@@ -145,7 +145,7 @@ let first_search_struct s funs structs fields_of_structs=
 
   in 
 
-  let rec expl_param fields p_l =
+  let rec expl_param fields p_l i =
     (*ajoute le paramètre p et son type au dictionnaire des paramètres de s, 
         et (s,type(p)) au dictionnaire des structures possédant le champ p *)
     match p_l with 
@@ -156,12 +156,12 @@ let first_search_struct s funs structs fields_of_structs=
               if Smap.mem (p.pname) fields then error(p.ploc,"already used field "^(p.pname));
 
               (*on n'a le droit qu'à une structure par nom de champ*)
-            let l,f=expl_param (Smap.add (p.pname) (s.sname,p.ptype) fields) q in 
+            let l,f=expl_param (Smap.add (p.pname) (s.sname,p.ptype,i) fields) q (i+1) in 
 
             (p.pname,p.ptype)::l,f
      
 
-  in let sargs,fields=expl_param fields_of_structs s.spar
+  in let sargs,fields=expl_param fields_of_structs s.spar 1
 
  in Smap.add (s.sname) {tsmut=s.smut; tsfields= sargs} structs,fields
 
@@ -340,7 +340,7 @@ let rec type_expr t_return env e =
                       | Earg (e3,x) -> (let te2=type_expr t_return env e2 
                                       and te3=type_expr t_return env e3 in
 
-                                    let s,tx=(try Smap.find x fields 
+                                    let s,tx,i=(try Smap.find x fields 
                                               with Not_found -> error (e1.loc,"No such field "^x))
                                       (*on cherche quel est la structure qui a pour champ x et le type associé, 
                                       on échoue si elle n'existe pas*)
@@ -364,7 +364,7 @@ let rec type_expr t_return env e =
                     in {ttype=tx.t; tdesc= TEvar x} (*pas redondant avec les cas précédents, car au-dessus on doit 
                                 vérifier la compatibilité de l'affectation*)
 
-  | Earg(e1,x) -> let s,tx=(try Smap.find x fields 
+  | Earg(e1,x) -> let s,tx,i=(try Smap.find x fields 
                   with Not_found -> error (e1.loc,"No such field "^x))
 
                 in let te1= type_expr t_return env e1 in 
@@ -523,7 +523,7 @@ let second_search ast env = (*On type le corps des fonctions et des expressions 
         | Struct s -> Ts s
 
    in let l=List.map (check_decl env) ast
-  in l,Smap.map (fun l -> List.map (check_func env) l) funs,structs,vars
+  in l,Smap.map (fun l -> List.map (check_func env) l) funs,structs,vars,fields
 
 let typing f=
   let env=first_search f in 
