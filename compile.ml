@@ -84,7 +84,7 @@ let get_vars =
 let rec concat_depile l= 
     (*concatène les codes de la liste l en dépilant les valeurs des expressions intermédiaires*)
     match l with 
-    | [] -> nop 
+    | [] -> pushq (imm 0) ++ pushq (imm 0)
     | [a] -> a 
     | a::q -> a ++ addq (imm 16) !%rsp ++ (concat_depile q)
 
@@ -463,7 +463,6 @@ and compile_f funs env f j i =
     label ("function_"^string_of_int(j)^"_"^string_of_int(i)) ++
     pushq !%rbp ++
     movq !%rsp !%rbp ++
-    movq !%rsp !%r14 ++
     alloc_var (Smap.cardinal loc_spec) ++
     compile_expr f_env funs 0 instrs ++
     popq rbx ++
