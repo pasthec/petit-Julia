@@ -442,7 +442,8 @@ let rec compile_expr loc_env funs ret_depth e=
     | TEreturn(None) ->   movq (imm ret_depth) !%rdx ++
                           movq !%rbp !%rcx ++
                           call "get_var" ++
-                          
+                          movq (imm 0) !%rax ++
+                          movq (imm 0) !%rbx ++
                           movq !%rcx !%rsp ++
                           popq rbp ++
                           ret
@@ -732,10 +733,11 @@ let rec compile_f f l i = begin match l with
     end
 *)
 
-let compile (decls, funs, structs,vars) ofile =
+
+let compile (decls, funs, structs, vars, fields) ofile =
 
     gstructs := structs;
-
+    
     let code = List.map (compile_instr funs) decls in
     let code = List.fold_right (++) code nop in
     let variables = Smap.fold (fun x _ acc -> label ("_v_"^x) ++ (dquad [0]) ++
