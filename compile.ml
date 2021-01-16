@@ -407,8 +407,8 @@ let rec compile_expr loc_env funs ret_depth e=
                                * type des arguments compilés, et on appelle la bonne
                                * fonction selon les cas *)
 
-                              ++ call ("function_"^string_of_int(icall)^"_0") ++
-                              
+                             ++ call ("function_"^string_of_int(icall)^"_"^(string_of_int(List.hd lpot))) ++
+
                               (* on désaloue les arguments *)
                               addq (imm (16*(List.length e_args))) !%rsp ++
 
