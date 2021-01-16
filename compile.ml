@@ -440,7 +440,8 @@ let rec compile_expr loc_env funs ret_depth e=
     | TEreturn(None) ->   movq (imm ret_depth) !%rdx ++
                           movq !%rbp !%rcx ++
                           call "get_var" ++
-                          
+                          movq (imm 0) !%rax ++
+                          movq (imm 0) !%rbx ++
                           movq !%rcx !%rsp ++
                           popq rbp ++
                           ret
