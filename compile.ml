@@ -376,10 +376,10 @@ let rec compile_expr loc_env funs ret_depth e=
                         jne "type_error" ++
                         testq !%rax !%rax ++
                         je ("instr_"^string_of_int(i+1)) ++   
-                        compile_expr loc_env funs (ret_depth+1) a ++
+                        compile_expr loc_env funs (ret_depth) a ++
                         jmp ("end_instr_"^string_of_int(i)) ++
                         label ("instr_"^string_of_int(i+1)) ++
-                        compile_expr loc_env funs (ret_depth+1) b ++
+                        compile_expr loc_env funs (ret_depth) b ++
                         jmp ("end_instr_"^string_of_int(i)) ++
                         label ("end_instr_"^string_of_int(i))
 
