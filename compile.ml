@@ -166,7 +166,7 @@ let rec compile_expr loc_env funs ret_depth e=
                                 popq rbx ++
                                 cmpq (imm 1) !%rbx ++
                                 je ("instr_true_"^string_of_int(i)) ++
-                                movq (imm 1) !%rbx ++
+                                movq (imm 0) !%rbx ++
                                 jmp ("end_instr_"^string_of_int(i)) ++
                                 label ("instr_true_"^string_of_int(i)) ++
                                 movq (imm 1) !%rbx ++
@@ -229,7 +229,7 @@ let rec compile_expr loc_env funs ret_depth e=
                     cmpq (imm (2*tb)) !%rax ++
                     jne "type_error" ++
                     popq rbx ++
-                    movq (imm 2) !%rax ++
+                    movq (imm 1) !%rax ++
                     subq !%rbx !%rax ++
                     (*1-e1, le not(1) faisait -2 (bit à bit en complément à 2 ?)*)
                     pushq !%rax ++
