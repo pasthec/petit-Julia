@@ -425,7 +425,7 @@ let rec compile_expr loc_env funs ret_depth e=
                           movq !%rbp !%rcx ++
                           call "get_var" ++
                           
-                          movq !%rbp !%rsp ++
+                          movq !%rcx !%rsp ++
                           popq rbp ++
                           ret
 
@@ -433,7 +433,7 @@ let rec compile_expr loc_env funs ret_depth e=
                           movq !%rbp !%rcx ++
                           call "get_var" ++
                           
-                          movq !%rbp !%rsp ++
+                          movq !%rcx !%rsp ++
                           popq rbp ++
                           ret
 
