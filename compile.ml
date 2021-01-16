@@ -29,7 +29,7 @@ let popn n = addq (imm (8*n)) !%rsp
 let rec alloc_var n =
     match n with 
     | 0 -> nop
-    | _ -> pushq (imm 0) ++ pushq (imm 0) ++ (alloc_var (n-1))
+    | _ -> pushq (imm 0) ++ pushq (imm 1) ++ (alloc_var (n-1))
 
 let string_map = ref Smap.empty and string_id = ref 0 
 let instr_id = ref 0 
