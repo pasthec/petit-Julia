@@ -9,6 +9,14 @@ module Tmap=Map.Make(struct type t=typ let compare=compare end)
 
 let t_env = ref (Tmap.add Tnothing 0 (Tmap.add Tbool 1 (Tmap.add Tint64 2 (Tmap.add Tstring 3 (Tmap.add Tany 4 (Tmap.empty))))))
 
+let id_of_type = function
+    | Tnothing -> 0
+    | Tbool -> 1
+    | Tint64 -> 2
+    | Tstring -> 3
+    | Tany -> 4
+    | Tstruct _ -> 5
+
 let f_implems = Hashtbl.create 2048
 
 (*
@@ -103,11 +111,11 @@ let rec compile_expr loc_env funs ret_depth e=
                     pushq (imm 0) ++
                     pushq (imm 0) (*l'expression print l vaut nothing*)
     | TEint i -> movq (imm64 i) !%rax ++ pushq !%rax ++
-                let ti = Tmap.find Tint64 !t_env in
+                let ti = id_of_type Tint64 in
                 pushq (imm (2*ti))
     | TEbool b -> let i=(if b then 1 else 0) in 
                 pushq (imm i) ++
-                let tb = Tmap.find Tbool !t_env in
+                let tb = id_of_type Tbool in
                 pushq (imm (2*tb))
 
     | TEstring s -> begin 
@@ -119,14 +127,14 @@ let rec compile_expr loc_env funs ret_depth e=
                     
                     in leaq (lab (".str_"^string_of_int(i))) rax ++
                     pushq !%rax ++
-                    let ts = Tmap.find Tstring !t_env  in
+                    let ts = id_of_type Tstring in
                     pushq (imm (2*ts)) 
                     end 
 
     
     | TEbinop(Bop(And),e1,e2) ->let i= !instr_id in 
                                 incr instr_id; (*évaluation paresseuse*)
-                                let tb=Tmap.find Tbool !t_env in
+                                let tb=id_of_type Tbool in
                                 compile_expr loc_env funs ret_depth e1 ++
                                 popq rax ++
                                 cmpq (imm (2*tb)) !%rax ++ (* on vérifie à la fois qu'on a un booléen et qu'il est défini*)
@@ -151,7 +159,7 @@ let rec compile_expr loc_env funs ret_depth e=
 
     | TEbinop(Bop(Or),e1,e2) -> let i= !instr_id in 
                                 incr instr_id;
-                                let tb=Tmap.find Tbool !t_env in
+                                let tb=id_of_type Tbool in
                                 compile_expr loc_env funs ret_depth e1 ++
                                 popq rax ++
                                 cmpq (imm (2*tb)) !%rax ++ 
@@ -172,9 +180,9 @@ let rec compile_expr loc_env funs ret_depth e=
                                 movq (imm 1) !%rbx ++
                                 label ("end_instr_"^string_of_int(i)) ++
                                 pushq !%rbx ++
-                                let tb = Tmap.find Tbool !t_env in pushq (imm (2*tb))
+                                pushq (imm (2*tb))
     
-    | TEbinop(Ar(op),e1,e2) -> let ti = Tmap.find Tint64 !t_env in 
+    | TEbinop(Ar(op),e1,e2) -> let ti = id_of_type Tint64 in 
         
                         compile_expr loc_env funs ret_depth e2 ++
                         compile_expr loc_env funs ret_depth e1 ++
@@ -208,9 +216,9 @@ let rec compile_expr loc_env funs ret_depth e=
                                 popq rbx ++
                                 compile_comp_op op ++
                                 pushq !%rax ++
-                                let tb = Tmap.find Tbool !t_env in pushq (imm (2*tb))
+                                let tb = id_of_type Tbool in pushq (imm (2*tb))
 
-    | TEbinop(Eq(op),e1,e2) -> let tb = Tmap.find Tbool !t_env in
+    | TEbinop(Eq(op),e1,e2) -> let tb = id_of_type Tbool in
                                 compile_expr loc_env funs ret_depth e2 ++
                                 compile_expr loc_env funs ret_depth e1 ++
                                 addq (imm 8) !%rsp ++
@@ -224,7 +232,7 @@ let rec compile_expr loc_env funs ret_depth e=
                                  pushq (imm (2*tb))
 
     | TEnot(e1) -> compile_expr loc_env funs ret_depth e1 ++
-                    let tb = Tmap.find Tbool !t_env in 
+                    let tb = id_of_type Tbool in 
                     popq rax ++
                     cmpq (imm (2*tb)) !%rax ++
                     jne "type_error" ++
@@ -236,7 +244,7 @@ let rec compile_expr loc_env funs ret_depth e=
                     pushq (imm (2*tb))
 
     | TEminus(e1) -> compile_expr loc_env funs ret_depth e1 ++
-                    let ti = Tmap.find Tint64 !t_env in
+                    let ti = id_of_type Tint64 in
                     popq rax ++
                     cmpq (imm (2*ti)) !%rax ++
                     jne "type_error" ++
@@ -367,7 +375,7 @@ let rec compile_expr loc_env funs ret_depth e=
                         pushq (imm 0) ++ pushq (imm 0)
 
     | TIfElse(s,a,b) -> let i= !instr_id in
-                        let tb = Tmap.find Tbool !t_env in
+                        let tb = id_of_type Tbool in
                         incr instr_id;
                         incr instr_id;
                         compile_expr loc_env funs ret_depth s ++
@@ -533,15 +541,15 @@ let print_f =
     movq (ind ~ofs:16 rbp) !%rsi ++ (*premier composant : le tag*)
     movq (ind ~ofs:24 rbp) !%rdi ++ (*deuxième composant : le truc à afficher*)
 
-    let ti = Tmap.find Tint64 !t_env in 
+    let ti = id_of_type Tint64 in 
     cmpq (imm (2*ti)) !%rsi ++
     je "print_int" ++
 
-    let tb = Tmap.find Tbool !t_env in
+    let tb = id_of_type Tbool in
     cmpq (imm (2*tb)) !%rsi ++
     je "print_bool" ++
 
-    let ts = Tmap.find Tstring !t_env in
+    let ts = id_of_type Tstring in
     cmpq (imm (2*ts)) !%rsi ++
     je "print_string" ++
 
@@ -659,10 +667,10 @@ let comparisons =
     movq (imm 0)  !%rax ++
 
     label "comp_type_1" ++
-    let ti = Tmap.find Tint64 !t_env in 
+    let ti = id_of_type Tint64 in 
     cmpq (imm (2*ti)) !%rcx ++
     je "comp_type_2" ++ (*on a un entier, on teste le deuxième type*)
-    let tb = Tmap.find Tbool !t_env in 
+    let tb = id_of_type Tbool in 
     cmpq (imm (2*tb)) !%rcx ++ (*pas d'entier, on teste si booléen*)
     jne "type_error" ++ (*ni entier ni booléen*)
 
