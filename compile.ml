@@ -21,6 +21,10 @@ let f_implems = Hashtbl.create 2048
 
 let gstructs = ref (Smap.empty)
 
+let gfields = ref (Smap.add "_" ("_",Tnothing,0) Smap.empty)
+
+let troiz (a,b,c) = c
+
 (*
 let j_call = ref 0 (* référence du nombre d'appels de fonction en tout, le j-ème
                       appel compilant des function_j_i pour 0<=i<n où n est le nombre
@@ -454,7 +458,8 @@ let rec compile_expr loc_env funs ret_depth e=
                           movq !%rax !%r14 ++
                           let fields_compiled = List.map2
                           (fun ei (x,tx) ->
-                              movq (imm (2*(id_of_type tx))) (ind r14) ++
+                              movq (imm (2*(id_of_type tx)))
+                              (ind ~ofs:(16*(troiz (Smap.find x !gfields))) r14) ++
                               (* à modifier avec le truc qui donne l'indice en f°
                                  de l'argument *)
                               compile_expr loc_env funs ret_depth
@@ -737,6 +742,7 @@ let rec compile_f f l i = begin match l with
 let compile (decls, funs, structs, vars, fields) ofile =
 
     gstructs := structs;
+    gfields := fields;
     
     let code = List.map (compile_instr funs) decls in
     let code = List.fold_right (++) code nop in
