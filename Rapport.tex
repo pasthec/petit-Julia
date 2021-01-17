@@ -109,16 +109,16 @@ de trouver son rbp lors d'une instruction return.
 Le dispatch n'a pas été réellement implémenté, seulement préparé (toutes les
 possibilités de fonctions déterminées par le typeurs sont implémentées, mais la
 première est systématiquement appelée). Un algorithme a cependant été pensé. On remarque
-qu'il existe un ordre strict non total "plus spécifique que" entre les métodes d'une même
+qu'il existe un ordre strict non total "plus spécifique que" entre les méthodes d'une même
 fonction, qui correspond à "chaque argument est plus spécifique que", où plus un type
 déclaré est plus spécifique qu'un $Any$. Ceci définit un graphe orienté acyclique sur
 les méthodes potentielles à un appel retournées par le typeur, qu'on peut calculer en
 OCaml étant donné qu'elles ont toutes le même nombre d'arguments. En remarquant que si
 une méthode est valide pour des arguments donnés (elle pourait s'exécuter avec ces
 arguments), toutes les méthodes accessibles depuis cette fonction le sont, on voit que
-le problème du dispatch est de savoir si il existe une unique fonction valide plus
-spécifique que toutes les autres, donc si il existe dans le graphe une et une seule
-méthode sans parent valide.
+le problème du dispatch est de savoir s'il existe une unique fonction valide plus
+spécifique que toutes les autres, donc s'il existe dans le graphe une et une seule
+méthode valide sans parent valide.
 On peut alors
 associer à chaque méthode trois variables locales correspondant à son identifiant et
 les booléens $est\_valide$ et $a\_un\_parent\_valide$. Pour chaque méthode, on peut
@@ -126,8 +126,7 @@ alors empiler les types de ses arguments, vérifier que tous les arguments sont 
 avec ceux des arguments réels calculés, puis si elle est valide affecter sa variable
 $est\_valide$ et les variables $a\_un\_parent\_valide$ de tous ses fils en conséquence.
 Enfin on vérifie qu'il existe une seule méthode valide sans parent valide, auquel cas
-on renvoit son identifiant et on dépile toutes les variables ayant servi au dispatch. Si il y a plusieurs de ces méthodes on renvoit l'erreur ambiguïté, et si
-il y en a aucune l'erreur aucune méthode ne correspond.
+on renvoit son identifiant et on dépile toutes les variables ayant servi au dispatch. S'il y a plusieurs de ces méthodes on renvoit l'erreur ambiguïté, et s'il y en a aucune l'erreur aucune méthode ne correspond.
 
 \subsection{Erreur}
 Le rsp initial est stocké durant toute l'exécution dans r15. En cas d'erreur, on affiche le message d'erreur, on met $1$ dans rax, r15 dans rsp pour remonter tout en haut de la pile, et on sort.
