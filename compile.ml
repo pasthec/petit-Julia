@@ -3,7 +3,7 @@ open X86_64
 open Format
 open Typer
 
-module Smap=Typer.Smap (*Map.Make(struct type t=string let compare=compare end) *)
+module Smap=Typer.Smap 
 
 module Tmap=Map.Make(struct type t=typ let compare=compare end)
 
@@ -28,13 +28,6 @@ let gstructs = ref (Smap.empty)
 let gfields = ref (Smap.add "_" ("_",Tnothing,0) Smap.empty)
 
 let troiz (a,b,c) = c
-
-(*
-let j_call = ref 0 (* référence du nombre d'appels de fonction en tout, le j-ème
-                      appel compilant des function_j_i pour 0<=i<n où n est le nombre
-                      de fonctions candidates à l'appel selon le type des arguments *)
-*)
-(* finalement c'est aussi simple d'utiliser instr_id *)
 
 let shift_level env =
     Smap.map (fun (o,l)-> (o,l+1)) env
@@ -89,7 +82,7 @@ let compile_comp_op op=
     
 
 let get_vars =
-    (*level est dans rdx, rbp de ce level est dans rcx, laisse le rbp final dans rdx *)
+    (*level est dans rdx, rbp de ce level est dans rcx, laisse le rbp final dans rcx *)
     label "get_var" ++
     cmpq (imm 0) !%rdx ++
     je "return_var" ++
@@ -211,13 +204,6 @@ let rec compile_expr loc_env funs ret_depth e=
                         pushq !%rax ++
                         pushq (imm (2*ti))
                         
-
-                        (*(match op with 
-                        | Ar(_) -> let ti = Tmap.find Tint64 !t_env in 
-                                   
-                                   (*la valeur est un entier*)
-                        | _ -> let tb = Tmap.find Tbool !t_env in pushq (imm (2*tb)))
-                                    (*la valeur est un booléen*)*)
     | TEbinop(Comp(op),e1,e2) -> compile_expr loc_env funs ret_depth e2 ++
                                 compile_expr loc_env funs ret_depth e1 ++
                                 popq rcx ++
@@ -249,7 +235,7 @@ let rec compile_expr loc_env funs ret_depth e=
                     popq rbx ++
                     movq (imm 1) !%rax ++
                     subq !%rbx !%rax ++
-                    (*1-e1, le not(1) faisait -2 (bit à bit en complément à 2 ?)*)
+                    (*1-e1*)
                     pushq !%rax ++
                     pushq (imm (2*tb))
 
@@ -486,7 +472,7 @@ let rec compile_expr loc_env funs ret_depth e=
 
                              ++ call ("function_"^string_of_int(icall)^"_"^(string_of_int(j))) ++
 
-                              (* on désaloue les arguments *)
+                              (* on désalloue les arguments *)
                               addq (imm (16*(List.length e_args))) !%rsp ++
 
                               
@@ -532,7 +518,8 @@ let rec compile_expr loc_env funs ret_depth e=
                           popq rbp ++
                           ret
 
-    | TEcalls(s,e) ->     pushq !%r14 ++
+    | TEcalls(s,e) ->     pushq !%r14 ++ (*on sauvegarde r14 pour éviter qu'il soit écrasé par une autre déclaration
+                            parmi les champs*)
                           movq (imm (8*(1+2*(List.length e)))) !%rdi ++
                           call "malloc" ++
                           movq !%rax !%r14 ++
@@ -558,9 +545,6 @@ let rec compile_expr loc_env funs ret_depth e=
                           pushq (imm (2*(id_of_type (Tstruct(s)))) ) ++
                           movq !%rax !%r14
 
-    (*| _ -> pushq (imm 0) ++ (*toutes les expressions non implémentées equivaudront à un double nothing
-                            sur la pile pour le moment (pour que tout soit de taille 2)*)
-        pushq (imm 0)*)
 
 
 and compile_f funs env f j i =
@@ -647,7 +631,6 @@ let print_f =
     Teste le type de la valeur, et appelle la fonction d'affichage dédiée*)
     label "print" ++
     
-    (*ici on devra tester la valeur dans rdi, pour l'instant osef j'affiche des entiers*)
     pushq !%rbp ++
     movq !%rsp !% rbp ++
        
@@ -681,8 +664,6 @@ let print_f =
     movq !%r15 !%rsp ++
     ret ++
 
-    (*dans les faits, ici il faudra faire un print pour chaque structure
-     * -> càd écrire "l'identifiant de la structure"(les valeurs des champs) *)
 
     label "end_print" ++
     movq !%rbp !%rsp ++
@@ -733,7 +714,7 @@ let print_nothing =
 
     jmp "end_print"
 
-let print_data =  (*penser à virer les \n pour ne pas faire doublon avec println quand on aura les strings*)
+let print_data =  
     label ".Sprint_int" ++
     string "%lld" ++
     label ".Sprint_string" ++
@@ -825,19 +806,6 @@ let errors =
     ret 
     
 
-    
-(*
-let rec create_f_env args = Smap.empty
-
-let rec compile_f f l i = begin match l with
-    | [] -> nop
-    | f_i::q -> label ("function_"^f^(string_of_int(i))) ++
-                compile_expr (create_f_env f_i.tfargr) f_i.tfinstrr ++
-                ret ++
-                compile_f f q (i+1)
-    end
-*)
-
 
 let compile (decls, funs, structs, vars, fields) ofile =
 
@@ -849,7 +817,6 @@ let compile (decls, funs, structs, vars, fields) ofile =
     let code = List.fold_right (++) code nop in
     let variables = Smap.fold (fun x _ acc -> label ("_v_"^x) ++ (dquad [0]) ++
                     label ("_t_"^x) ++ (dquad [1]) ++ acc) vars nop in
-    (*let functions = Smap.fold (fun f l acc -> compile_f f l 0 ++ acc ) funs nop in*)
     let d = print_data in 
     let s = print_string_labels ( !string_map) in 
     
