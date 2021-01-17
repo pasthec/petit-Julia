@@ -97,7 +97,7 @@ Chaque fois que l'on utilise une variable, on tente d'abord de la chercher parmi
 Comme l'environnement en petit-julia est dynamique et ne peut pas être déterminé
 statiquement, mais ne dépend que de la ligne dans le programme initial, on compile
 toutes les variantes possibles de chaque fonction à chaque appel de celle ci à une
-ligne différente (stoqués dans $f\_implems$). Ainsi une fonction récursive sera
+ligne différente (stockées dans $f\_implems$). Ainsi une fonction récursive sera
 compilée au niveau de son appel initial et au niveau de son appel récursif, puisqu'elle
 pourrait avoir redéclaré une variable globale en variable locale par exemple, mais elle
 ne sera pas réimplémentée plus de deux fois (sauf si elle est réutilisée autre part).
