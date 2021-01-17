@@ -366,6 +366,10 @@ let rec compile_expr loc_env funs ret_depth e=
                     compile_expr loc_env funs ret_depth c ++ (*on compile la condition, si elle est fausse on saute en fin de boucle*)
                     popq rax ++
                     popq rbx ++
+
+                    cmpq (imm (2*(id_of_type Tbool))) !%rax ++ (*on vérifie que la condition est un booléen*)
+                    jne "type_error" ++
+
                     cmpq (imm 0) !%rbx ++
                     je ("end_instr_"^string_of_int(i)) ++
                     pushq !%rbp ++
@@ -399,8 +403,12 @@ let rec compile_expr loc_env funs ret_depth e=
 
             
                         compile_expr loc_env funs ret_depth e1 ++ (*e1 se trouve à la place de la valeur x*)
+                        cmpq (imm (2*(id_of_type Tint64))) (ind rsp) ++
+                        jne "type_error"++ (*on vérifie que les bornes sont entières*)
 
                         compile_expr loc_env funs ret_depth e2 ++
+                        cmpq (imm (2*(id_of_type Tint64))) (ind rsp) ++
+                        jne "type_error"++ 
                         (*on compile e2 une fois*)
                         label ("instr_"^string_of_int(i)) ++
                         pushq !%rbp ++
