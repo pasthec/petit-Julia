@@ -455,6 +455,11 @@ let rec compile_expr loc_env funs ret_depth e=
 
 
     | TEcallf(f,lpot,e_args,icall) -> 
+                              (* comme le dispatch n'a pas été encore implémenté, on utilise la première
+                                 méthode potentielle *)
+
+                              let j = List.hd lpot in
+
                               (* on commence par compiler les arguments *)
                               let args_compiled =
                               List.map (compile_expr loc_env funs ret_depth) e_args in
@@ -478,10 +483,29 @@ let rec compile_expr loc_env funs ret_depth e=
                                * type des arguments compilés, et on appelle la bonne
                                * fonction selon les cas *)
 
-                             ++ call ("function_"^string_of_int(icall)^"_"^(string_of_int(List.hd lpot))) ++
+
+                             ++ call ("function_"^string_of_int(icall)^"_"^(string_of_int(j))) ++
 
                               (* on désaloue les arguments *)
                               addq (imm (16*(List.length e_args))) !%rsp ++
+
+                              
+                              (* on teste que le type de retour est compatible avec celui annoncé *)
+
+
+                              (
+                                  let lf = Smap.find f funs in
+                                  let f_j = List.nth lf j in
+                                  let t_r = f_j.tfresr in
+                                  if t_r <> Tany then (
+                                      movq !%rbx !%rcx ++
+                                      cmpq  (imm (2*(id_of_type t_r))) !%rcx ++
+                                      jne "type_error"
+                                  )
+                                  else
+                                      nop
+                              )
+                              ++
 
                               (* la fonction renvoie (val,type) dans (rax,rbx) qu'on 
                                * rempile donc pour que l'appel retourne ces valeurs *)
@@ -642,6 +666,14 @@ let print_f =
     cmpq (imm (2*ts)) !%rsi ++
     je "print_string" ++
 
+    let tn = id_of_type Tnothing in
+    cmpq (imm (2*tn)) !%rsi ++
+    je "print_nothing" ++
+
+    andq (imm 1) !%rsi ++
+    testq !%rsi !%rsi ++
+    jmp "type_error" ++
+
     leaq (lab ".implementation_error") rdi ++
     movq (imm 0) !%rax ++
     call "printf" ++
@@ -692,6 +724,15 @@ let print_string =
 
     jmp "end_print"
 
+let print_nothing =
+    label "print_nothing" ++
+    leaq (lab ".s_nothing") rsi ++
+    leaq (lab ".Sprint_string") rdi ++
+    movq (imm 0) !%rax ++
+    call "printf" ++
+
+    jmp "end_print"
+
 let print_data =  (*penser à virer les \n pour ne pas faire doublon avec println quand on aura les strings*)
     label ".Sprint_int" ++
     string "%lld" ++
@@ -706,7 +747,9 @@ let print_data =  (*penser à virer les \n pour ne pas faire doublon avec printl
     label ".negative_exp" ++
     string "Exponents should be nonnegative\n" ++
     label ".bad_type" ++
-    string "ERROR: Bad Type or Variable not Defined \n"
+    string "ERROR: Bad Type or Variable not Defined \n" ++
+    label ".s_nothing" ++
+    string "nothing\n"
 
 let print_string_label s i =
     label (".str_"^string_of_int(i)) ++
@@ -827,6 +870,7 @@ let compile (decls, funs, structs, vars, fields) ofile =
             print_int ++
             print_bool ++
             print_string ++
+            print_nothing ++
             comparisons ++
             get_vars ++
             errors ++
