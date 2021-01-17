@@ -76,7 +76,7 @@ Les blocs possèdent également l'information de l'environnement local spécifiq
 \subsection{Valeurs}
 Toutes les valeurs occupent deux mots de 64 bits. Un premier mot indique si le type de la valeur : entier, booléen, chaîne, ou structure (toutes les structures ont ce même identifiant). Ces identifiants sont pairs, sauf s'il s'agit d'une variable non encore déclarée, auquel cas ils sont impairs. Le deuxième mot est la valeur si on a un entier ou un booléen, ou un pointeur dans le cas d'une chaîne ou d'une structure. 
 
-Les chaînes de caractères sont allouées dans le segment de données. En effet, on peut déterminer statiquement toutes les chaînes qui apparaissent dans le programme, et on attribue à chacune un identifiant. Les structures sont allouées sur le tas, par un mot de taille $2n+1$ où $n$ est le nombre de champs de la structure. Le premier mot est un identifiant unique à la structure, et chacun de ses champs est ensuite représenté comme indiqué ci-dessus. 
+Les chaînes de caractères sont allouées dans le segment de données. En effet, on peut déterminer statiquement toutes les chaînes qui apparaissent dans le programme, et on attribue à chacune un identifiant. Les structures sont allouées sur le tas, par un mot de taille $2n+1$ où $n$ est le nombre de champs de la structure. Le premier mot est un identifiant unique à la structure, et chacun de ses champs est ensuite représenté par un type et une valeur de la même façon qu'indiqué ci-dessus. 
 
 La valeur $nothing$ est représentée par un double $0$. 
 
