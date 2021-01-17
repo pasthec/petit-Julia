@@ -16,6 +16,10 @@ let id_of_type = function
     | Tstring -> 3
     | Tany -> 4
     | Tstruct _ -> 5
+let id_structs = ref (Smap.empty)
+
+let id_of_struct s = 
+    Smap.find s ( !id_structs) 
 
 let f_implems = Hashtbl.create 2048
 
@@ -259,7 +263,8 @@ let rec compile_expr loc_env funs ret_depth e=
                     pushq !%rax ++
                     pushq (imm (2*ti))
     
-    | TEaffect(e1, e2) -> begin match e1.tdesc with
+    | TEaffect(e1, e2) ->
+                            begin match e1.tdesc with
                           | TEvar(x) -> compile_expr loc_env funs ret_depth e2 ++
                                         popq rax ++ popq rbx ++
                                         begin try 
@@ -272,12 +277,29 @@ let rec compile_expr loc_env funs ret_depth e=
                                         with Not_found -> 
                                             movq !%rax (ind ("_t_"^x)) ++
                                             movq !%rbx (ind ("_v_"^x))
-                                       end ++
-                                       pushq !%rbx ++ 
-                                       pushq !%rax (*l'expression x=a vaut a*)
+                                       end 
+
+ 
+                          | TEarg(e3,x) -> 
+                                        compile_expr loc_env funs ret_depth e2 ++
+                                        compile_expr loc_env funs ret_depth e3 ++
+                                        popq rcx ++ popq rdx ++
+                                        popq rax ++ popq rbx ++
+                                        cmpq (imm (2*(id_of_type (Tstruct("_"))))) !%rcx ++
+                                        jne "type_error" ++
+
+                                        let (s,t,num)=Smap.find x ( !gfields) in 
+                                        let i = id_of_struct s in 
+                                        cmpq (imm i) (ind rdx) ++
+                                        jne "type_error" ++
+                                        movq !%rax (ind ~ofs:(2*(num-1)*8+8) rdx)  ++
+                                        movq !%rbx (ind ~ofs:(2*(num-1)*8+16) rdx)
+
+                          | _ -> failwith "impossible matching case" 
                           
-                          | _ ->       pushq (imm 0) ++ pushq (imm 0)
-                          end
+                          end ++
+                          pushq !%rbx ++ 
+                          pushq !%rax  (*l'expression x=a vaut a*)
                           
     | TEvar(x) -> begin try 
                     let (o,l) = Smap.find x loc_env in 
@@ -293,6 +315,23 @@ let rec compile_expr loc_env funs ret_depth e=
                     movq (ind ("_v_"^x)) !%rax ++ pushq !%rax ++
                     movq (ind ("_t_"^x)) !%rax ++ pushq !%rax
                 end 
+
+
+    | TEarg(e1,x) -> compile_expr loc_env funs ret_depth e1 ++
+                    popq rax ++ 
+                    popq rbx ++
+                    cmpq (imm (2*(id_of_type (Tstruct("_"))))) !%rax ++
+                    jne "type_error" ++
+                    movq !%rbx !%rcx ++
+                    let (s,t,num)=Smap.find x ( !gfields) in 
+                    let i = id_of_struct s in 
+                    
+                    cmpq (imm i) (ind rcx) ++
+                    jne "type_error" ++ (*mauvaise structure*)
+                    movq (ind ~ofs:(2*(num-1)*8+8) rcx) !%rax ++
+                    movq (ind ~ofs:(2*(num-1)*8+16) rcx) !%rbx ++
+                    pushq !%rbx ++
+                    pushq !%rax 
 
     | TEblock (b,_) -> let l=List.map (compile_expr loc_env funs ret_depth) b in 
                       concat_depile l 
@@ -453,34 +492,29 @@ let rec compile_expr loc_env funs ret_depth e=
                           ret
 
     | TEcalls(s,e) ->     pushq !%r14 ++
-                          movq (imm (2*(List.length e))) !%rdi ++
-                          ins "malloc" ++
+                          movq (imm (8*(1+2*(List.length e)))) !%rdi ++
+                          call "malloc" ++
                           movq !%rax !%r14 ++
+                          movq (imm (id_of_struct s)) (ind r14) ++
                           let fields_compiled = List.map2
                           (fun ei (x,tx) ->
-                              movq (imm (2*(id_of_type tx)))
-                              (ind ~ofs:(16*(troiz (Smap.find x !gfields))) r14) ++
-                              (* à modifier avec le truc qui donne l'indice en f°
-                                 de l'argument *)
-                              compile_expr loc_env funs ret_depth
-                              {ttype=tx; tdesc=TEaffect(
-                                  {ttype=tx;tdesc=TEarg(
-                                      {ttype=Tstruct(s); tdesc=TEvar(s)},x)
-                                  }
-                                  ,ei)
-                              } ++
-                              addq (imm 16) !%rsp
+                              let num=troiz (Smap.find x ( !gfields)) in 
+                                compile_expr loc_env funs ret_depth ei ++
+                              popq rax ++ popq rbx ++
+                              movq !%rax (ind ~ofs:(2*(num-1)*8+8) r14)  ++
+                              movq !%rbx (ind ~ofs:(2*(num-1)*8+16) r14)  
+                              
                           )
                           e (Smap.find s !gstructs).tsfields in
                           List.fold_left (++) nop fields_compiled ++
                           popq rax ++
                           pushq !%r14 ++
-                          pushq (imm (id_of_type (Tstruct(s))) ) ++
+                          pushq (imm (2*(id_of_type (Tstruct(s)))) ) ++
                           movq !%rax !%r14
 
-    | _ -> pushq (imm 0) ++ (*toutes les expressions non implémentées equivaudront à un double nothing
+    (*| _ -> pushq (imm 0) ++ (*toutes les expressions non implémentées equivaudront à un double nothing
                             sur la pile pour le moment (pour que tout soit de taille 2)*)
-        pushq (imm 0)
+        pushq (imm 0)*)
 
 
 and compile_f funs env f j i =
@@ -719,6 +753,7 @@ let comparisons =
 let errors =
     label "type_error" ++ 
     leaq (lab ".bad_type") rdi ++
+    movq (imm 0) !%rax ++
     call "printf" ++ 
     movq !%r15 !%rsp ++
     movq (imm 1) !%rax ++
@@ -743,7 +778,8 @@ let compile (decls, funs, structs, vars, fields) ofile =
 
     gstructs := structs;
     gfields := fields;
-    
+    let i = ref 0 in
+    id_structs := Smap.map (fun t -> incr i; !i) structs; 
     let code = List.map (compile_instr funs) decls in
     let code = List.fold_right (++) code nop in
     let variables = Smap.fold (fun x _ acc -> label ("_v_"^x) ++ (dquad [0]) ++
