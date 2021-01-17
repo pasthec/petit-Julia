@@ -68,7 +68,33 @@ l'environnement global et l'environnement local dans lequel elles sont plongées
 échéant.
 \newline
 
-Le typage reconstruit un arbre de syntaxe abstraite sur le même modèle que le précédent en remplaçant la localisation d'une expression dans le fichier par son type. Les fonctions et les structures sont retenues dans un dictionnaire, on détruit donc les instructions des fonctions dans la nouvelle liste de déclarations. 
+Le typage reconstruit un arbre de syntaxe abstraite sur le même modèle que le précédent en remplaçant la localisation d'une expression dans le fichier par son type. Les fonctions et les structures sont retenues dans un dictionnaire, on détruit donc les instructions des fonctions dans la nouvelle liste de déclarations. On renvoie les dictionnaire des variables globales, des fonctions, des structures et des champs.
 
 Les blocs possèdent également l'information de l'environnement local spécifique dans lequel ils sont éventuellement plongés (s'il s'agit d'instructions d'un for, d'un while ou du corps d'une fonction). A un appel de fonction, on associe la liste des identifiants des fonctions de même nom compatibles avec le nombre d'arguments et leur type. Si aucune fonction n'est compatible, on échoue, et si plusieurs fonctions sont compatibles et que l'on est sûrs de ne pas avoir d'informations plus précises à l'exécution, c'est à dire que tous les types des arguments sont connus précisément et que parmi les fonctions compatibles aucune n'est plus spécifique que les autres, on échoue aussi.
+
+\section{Production de code}
+\subsection{Valeurs}
+Toutes les valeurs occupent deux mots de 64 bits. Un premier mot indique si le type de la valeur : entier, booléen, chaîne, ou structure (toutes les structures ont ce même identifiant). Ces identifiants sont pairs, sauf s'il s'agit d'une variable non encore déclarée, auquel cas ils sont impairs. Le deuxième mot est la valeur si on a un entier ou un booléen, ou un pointeur dans le cas d'une chaîne ou d'une structure. 
+
+Les chaînes de caractères sont allouées dans le segment de données. En effet, on peut déterminer statiquement toutes les chaînes qui apparaissent dans le programme, et on attribue à chacune un identifiant. Les structures sont allouées sur le tas, par un mot de taille $2n+1$ où $n$ est le nombre de champs de la structure. Le premier mot est un identifiant unique à la structure, et chacun de ses champs est ensuite représenté comme indiqué ci-dessus. 
+
+La valeur $nothing$ est représentée par un double $0$. 
+
+\subsection{Compilation des expressions}
+La fonction $compile\_expr$ empile la valeur de l'expression au sommet de la pile (type au sommet et valeur en-dessous). Les expressions n'ayant pas de valeur valent $nothing$. On parcourt récursivement l'arbre de syntaxe abstraite renvoyé par le typeur en compilant les expressions les unes après les autres. On fait des vérifications de type pour les opérations binaires, les conditions des boucles et tests. 
+
+Des labels $instr_i$ sont utilisés pour les sauts conditionnels des boucles et des tests. Une référence $instr\_id$ est incrémentée pour donner des identifiants aux instructions.
+
+\subsection{Variables}
+Les variables globales sont allouées dans le segment de données, avec une valeur de type et une valeur. Leur type est initialisé à $1$ (unbound) et est modifié au moment où elles sont affectées. 
+
+Les variables locales sont allouées sur la pile. Le typeur renvoie pour tout bloc l'environnement local spécifique du bloc. On garde un environnement qui consiste en une paire $(l,e)$ pour chaque variable locale. $l$ représente le niveau auquel cette variable est conservée. Ainsi, si elle est spécifique au bloc, $l$ vaut $0$, si elle est déclarée à un niveau plus haut, $l$ est positif. $o$ représente l'ofset par rapport au rbp du niveau de déclaration auquel la variable est conservée. La fonction $get\_vars$ récupère le rbp du niveau $l$ en remontant récursivement la pile de rbp en rbp, puis on récupère la variable locale avec l'ofset.
+
+Chaque fois que l'on utilise une variable, on tente d'abord de la chercher parmi les variables locales puis en cas d'échec parmi les variables globales. On ne peut pas échouer une deuxième fois, car alors le typeur aurait déjà échoué à cet endroit.
+
+\subsection{Fonctions}
+
+\subsection{Erreur}
+Le rsp initial est stocké durant toute l'exécution dans r15. En cas d'erreur, on affiche le message d'erreur, on met $1$ dans rax, r15 dans rsp pour remonter tout en haut de la pile, et on sort.
+
 \end{document}
