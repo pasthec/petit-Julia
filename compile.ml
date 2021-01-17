@@ -292,6 +292,13 @@ let rec compile_expr loc_env funs ret_depth e=
                                         let i = id_of_struct s in 
                                         cmpq (imm i) (ind rdx) ++
                                         jne "type_error" ++
+
+                                        (if t=Tany then nop
+                                        else let j=id_of_type t in (*si le champ attendu n'est pas de type Tany,
+                                        on vérifie qu'on a bien le bon type*)
+                                        cmpq (imm (2*j)) !%rax ++
+                                        jne "type_error") ++ 
+
                                         movq !%rax (ind ~ofs:(2*(num-1)*8+8) rdx)  ++
                                         movq !%rbx (ind ~ofs:(2*(num-1)*8+16) rdx)
 
@@ -328,6 +335,8 @@ let rec compile_expr loc_env funs ret_depth e=
                     
                     cmpq (imm i) (ind rcx) ++
                     jne "type_error" ++ (*mauvaise structure*)
+
+                    
                     movq (ind ~ofs:(2*(num-1)*8+8) rcx) !%rax ++
                     movq (ind ~ofs:(2*(num-1)*8+16) rcx) !%rbx ++
                     pushq !%rbx ++
@@ -501,6 +510,11 @@ let rec compile_expr loc_env funs ret_depth e=
                               let num=troiz (Smap.find x ( !gfields)) in 
                                 compile_expr loc_env funs ret_depth ei ++
                               popq rax ++ popq rbx ++
+                              (if tx=Tany then nop
+                              else let i=id_of_type tx in (*si le type attendu pour ce champ n'est pas any, on
+                                    vérifie qu'on a bien le bon type*)
+                              cmpq (imm (2*i)) !%rax ++
+                              jne "type_error") ++
                               movq !%rax (ind ~ofs:(2*(num-1)*8+8) r14)  ++
                               movq !%rbx (ind ~ofs:(2*(num-1)*8+16) r14)  
                               
@@ -796,6 +810,7 @@ let compile (decls, funs, structs, vars, fields) ofile =
         { text =
             globl "main" ++ label "main" ++
             movq !%rsp !%r15 ++
+            movq (imm 0) (lab "_t_nothing") ++
             code ++
             movq (imm 0) !%rax ++ (* exit *)
             ret ++
