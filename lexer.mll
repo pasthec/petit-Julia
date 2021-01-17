@@ -63,6 +63,9 @@ let esc_backslash s =
                           | '\\' -> res:= !res ^ "\\";
                                     incr i ;
                                     incr i 
+                          | '\"' -> res:= !res ^ "\"";
+                                  incr i;
+                                  incr i
                           | _ -> res := !res ^ (String.sub s ( !i) 1);
                                 incr i end 
       
